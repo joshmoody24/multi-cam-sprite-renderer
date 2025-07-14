@@ -5,3 +5,7 @@
 ## Result
 
 <img width="770" height="513" alt="sprite_sheet" src="https://github.com/user-attachments/assets/b8b16d14-5c31-463e-aed1-30d07d68adc9" />
+
+## Status
+
+This project is in extremely early phases right now and probably shouldn't be used by anyone but the author.
