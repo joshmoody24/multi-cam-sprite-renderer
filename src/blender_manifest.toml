@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
-id = "paper_sprite_pipeline"
+id = "multi_cam_sprite_renderer"
 version = "1.0.0"
-name = "Paper Sprite Pipeline"
-tagline = "A tool for pre-rendering 3D models to sprites"
+name = "Multi-Cam Sprite Renderer"
+tagline = "A tool for rendering 3D models from multiple camera angles to sprite sheets"
 maintainer = "Josh Moody <josh@joshmoody.org>"
 # Supported types: "add-on", "theme"
 type = "add-on"
