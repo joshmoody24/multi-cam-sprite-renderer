@@ -5,7 +5,7 @@ import os
 from typing import Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .mcsr_types import McrsScene
+    from .mcsr_types import McsrScene
     from bpy.stub_internal.rna_enums import OperatorReturnItems
 else:
     OperatorReturnItems = str
@@ -19,6 +19,10 @@ from .utils import (
     point_camera_at_target,
     create_sprite_sheet_from_temp_files,
     TempDirectoryManager,
+    get_enabled_passes,
+    cleanup_compositor_nodes,
+    setup_compositor_nodes,
+    update_compositor_file_paths,
 )
 
 
@@ -47,11 +51,24 @@ class MultiCamSpriteRenderStillOperator(bpy.types.Operator):
             center, scene.mcsr_distance, camera_count
         )
 
-        wm.progress_begin(0, camera_count + 1)
+        enabled_passes = get_enabled_passes(scene)
+        if not enabled_passes:
+            self.report({"ERROR"}, "No render passes enabled")
+            return {"CANCELLED"}
+
+        wm.progress_begin(0, camera_count + len(enabled_passes))
         temp_cameras = []
 
         with TempDirectoryManager() as temp_dir:
             try:
+                # Setup compositor once for all renders
+                from .utils import setup_compositor_nodes, update_compositor_file_paths
+
+                setup_compositor_nodes(scene, temp_dir, enabled_passes)
+
+                # Enable compositor usage
+                scene.render.use_compositing = True
+
                 for i, cam_location in enumerate(camera_positions):
                     wm.progress_update(i)
 
@@ -63,19 +80,37 @@ class MultiCamSpriteRenderStillOperator(bpy.types.Operator):
                     point_camera_at_target(camera, center)
 
                     scene.camera = camera
-                    temp_filepath = os.path.join(temp_dir, f"temp_view_{i:02d}.png")
-                    scene.render.filepath = temp_filepath
-                    bpy.ops.render.render(write_still=True)
+
+                    # Update compositor file paths for this camera
+                    update_compositor_file_paths(scene, enabled_passes, i)
+
+                    # Render once - compositor will handle all file outputs
+                    bpy.ops.render.render(write_still=False)
 
                     self.report({"INFO"}, f"Rendered view {i+1}/{camera_count}")
 
                 wm.progress_update(camera_count)
-                sprite_sheet_path = os.path.join(output_path, "sprite_sheet.png")
-                create_sprite_sheet_from_temp_files(
-                    temp_dir, camera_count, scene.mcsr_spacing, sprite_sheet_path
-                )
+
+                # Create sprite sheets for each pass
+                for pass_name in enabled_passes:
+                    sprite_sheet_path = os.path.join(
+                        output_path, f"sprite_sheet_{pass_name}.png"
+                    )
+                    create_sprite_sheet_from_temp_files(
+                        temp_dir,
+                        camera_count,
+                        scene.mcsr_spacing,
+                        sprite_sheet_path,
+                        pass_name,
+                    )
 
             finally:
+                # Clean up compositor nodes unless debugging
+                if not scene.mcsr_debug_preserve_compositor:
+                    from .utils import cleanup_compositor_nodes
+
+                    cleanup_compositor_nodes(scene)
+
                 wm.progress_end()
                 for camera in temp_cameras:
                     bpy.data.objects.remove(camera, do_unlink=True)
@@ -205,3 +240,26 @@ class TogglePreviewOperator(bpy.types.Operator):
         for area in context.screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
+
+
+class ApplyRecommendedSettingsOperator(bpy.types.Operator):
+    bl_idname = "mcsr.apply_recommended_settings"
+    bl_label = "Apply Recommended Settings"
+    bl_description = "Makes renders transparent, sets view transform to Raw, and sets filter size to 0 if pixel art is enabled"
+
+    def execute(self, context) -> Set[OperatorReturnItems]:
+        scene = get_mcsr_scene(context.scene)
+
+        # Make background transparent
+        scene.render.film_transparent = True
+
+        # Set filter size to 0 if pixel art is enabled
+        if scene.mcsr_pixel_art:
+            scene.render.filter_size = 0.0
+
+        # Set view transform to Raw for accurate color representation
+        assert scene.view_settings is not None, "Scene view settings should not be None"
+        scene.view_settings.view_transform = "Raw"  # type: ignore[attr-defined]
+
+        self.report({"INFO"}, "Applied recommended settings")
+        return {"FINISHED"}

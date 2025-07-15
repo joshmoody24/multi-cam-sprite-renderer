@@ -147,6 +147,51 @@ def register_properties():
         min=0,
     )
 
+    # Scene configuration
+    bpy.types.Scene.mcsr_pixel_art = BoolProperty(  # type: ignore[misc]
+        name="Pixel Art",
+        description="Enable pixel art mode (affects filtering)",
+        default=False,
+    )
+
+    # Render passes
+    bpy.types.Scene.mcsr_render_lit = BoolProperty(  # type: ignore[misc]
+        name="Lit",
+        description="Render standard lit pass",
+        default=True,
+    )
+
+    bpy.types.Scene.mcsr_render_diffuse = BoolProperty(  # type: ignore[misc]
+        name="Diffuse",
+        description="Render diffuse color pass",
+        default=False,
+    )
+
+    bpy.types.Scene.mcsr_render_specular = BoolProperty(  # type: ignore[misc]
+        name="Specular",
+        description="Render specular pass",
+        default=False,
+    )
+
+    bpy.types.Scene.mcsr_render_normal = BoolProperty(  # type: ignore[misc]
+        name="Normal",
+        description="Render normal pass",
+        default=False,
+    )
+
+    # Debug settings
+    bpy.types.Scene.mcsr_show_debug = BoolProperty(  # type: ignore[misc]
+        name="Show Debug",
+        description="Show debug options",
+        default=False,
+    )
+
+    bpy.types.Scene.mcsr_debug_preserve_compositor = BoolProperty(  # type: ignore[misc]
+        name="Preserve Compositor",
+        description="Keep compositor nodes after render for debugging",
+        default=False,
+    )
+
 
 def unregister_properties():
     """Unregister all properties and clean up preview objects"""
@@ -168,6 +213,13 @@ def unregister_properties():
         "mcsr_show_preview",
         "mcsr_preview_mode",
         "mcsr_preview_camera_index",
+        "mcsr_pixel_art",
+        "mcsr_render_lit",
+        "mcsr_render_diffuse",
+        "mcsr_render_specular",
+        "mcsr_render_normal",
+        "mcsr_show_debug",
+        "mcsr_debug_preserve_compositor",
     ]
 
     for prop in props_to_remove:

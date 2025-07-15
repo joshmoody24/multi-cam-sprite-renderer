@@ -3,7 +3,7 @@
 import bpy
 import importlib
 
-from . import ui_panel, operators, properties, utils, constants
+from . import ui_panel, operators, properties, utils, constants, mcsr_types
 
 # Reload modules when addon is reloaded
 if "bpy" in locals():
@@ -12,12 +12,14 @@ if "bpy" in locals():
     importlib.reload(properties)
     importlib.reload(utils)
     importlib.reload(constants)
+    importlib.reload(mcsr_types)
 
 classes = (
     ui_panel.MultiCamSpriteRendererPanel,
     operators.MultiCamSpriteRenderStillOperator,
     operators.MultiCamSpriteRenderAnimationOperator,
     operators.TogglePreviewOperator,
+    operators.ApplyRecommendedSettingsOperator,
 )
 
 
