@@ -2,7 +2,7 @@
 
 multi-cam-sprite-renderer is a Blender plugin for pre-rendering normal-mapped sprites from 3D models.
 
-This allows for 2D sprites which dynamically response to lighting
+The resulting 2D sprites can dynamically respond to lighting
 
 ## Example
 
