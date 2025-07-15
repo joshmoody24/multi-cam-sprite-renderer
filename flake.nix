@@ -25,6 +25,9 @@
           export BLENDER_PATH=${blender}/bin/blender
           export PYTHONPATH=$PWD/src:$PYTHONPATH
           echo "Run: \$BLENDER_PATH --python-expr 'import bpy; print(bpy.app.version)'"
+          
+          source ./.venv/bin/activate
+          pip install -r requirements.txt
         '';
       };
     };

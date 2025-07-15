@@ -49,18 +49,6 @@ def apply_camera_settings(camera, scene):
     cam_data.clip_start = scene.mcsr_clip_start
     cam_data.clip_end = scene.mcsr_clip_end
 
-    # Apply depth of field settings
-    if scene.mcsr_use_dof:
-        cam_data.dof.use_dof = True
-        cam_data.dof.aperture_fstop = scene.mcsr_dof_aperture
-
-        if scene.mcsr_dof_object:
-            cam_data.dof.focus_object = scene.mcsr_dof_object
-        else:
-            cam_data.dof.focus_distance = scene.mcsr_dof_distance
-    else:
-        cam_data.dof.use_dof = False
-
 
 def point_camera_at_target(camera, target_location):
     """Point a camera at a target location"""
@@ -143,6 +131,8 @@ def create_sprite_sheet_from_temp_files(
     cols = math.ceil(math.sqrt(camera_count))
     rows = math.ceil(camera_count / cols)
 
+    assert bpy.context.scene is not None, "No active scene found in context"
+
     render_width = bpy.context.scene.render.resolution_x
     render_height = bpy.context.scene.render.resolution_y
 
@@ -164,7 +154,7 @@ def create_sprite_sheet_from_temp_files(
 
         if os.path.exists(img_path):
             img = bpy.data.images.load(img_path)
-            img_pixels = list(img.pixels)
+            img_pixels = list(img.pixels)  # type: ignore[arg-type]
 
             # Copy pixels to sprite sheet with Y-coordinate flipping for Blender
             for y in range(render_height):
@@ -208,4 +198,3 @@ class TempDirectoryManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.temp_dir:
             shutil.rmtree(self.temp_dir, ignore_errors=True)
-

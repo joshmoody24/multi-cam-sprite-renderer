@@ -36,14 +36,6 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         box.prop(scene, "mcsr_clip_start")
         box.prop(scene, "mcsr_clip_end")
 
-        # Depth of Field Settings
-        box.separator()
-        box.prop(scene, "mcsr_use_dof")
-        if scene.mcsr_use_dof:
-            box.prop(scene, "mcsr_dof_object")
-            if not scene.mcsr_dof_object:
-                box.prop(scene, "mcsr_dof_distance")
-            box.prop(scene, "mcsr_dof_aperture")
 
     def _draw_sprite_settings(self, layout, scene):
         """Draw sprite sheet settings section"""

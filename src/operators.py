@@ -2,7 +2,15 @@
 
 import bpy
 import os
-from mathutils import Vector
+from typing import Set, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .mcsr_types import McrsScene
+    from bpy.stub_internal.rna_enums import OperatorReturnItems
+else:
+    OperatorReturnItems = str
+
+from .mcsr_types import get_mcsr_scene
 
 from .utils import (
     get_scene_center,
@@ -19,9 +27,11 @@ class MultiCamSpriteRenderStillOperator(bpy.types.Operator):
     bl_label = "Render Multi-Cam Sprite Image"
     bl_description = "Renders current frame from multiple camera angles"
 
-    def execute(self, context):
-        scene = context.scene
+    def execute(self, context) -> Set[OperatorReturnItems]:
+        scene = get_mcsr_scene(context.scene)
         wm = context.window_manager
+
+        assert wm is not None, "Window manager is required for progress updates"
 
         output_path = bpy.path.abspath(scene.mcsr_output_path)
         if not output_path:
@@ -83,9 +93,11 @@ class MultiCamSpriteRenderAnimationOperator(bpy.types.Operator):
     bl_label = "Render Multi-Cam Sprite Animation"
     bl_description = "Renders animation frames from multiple camera angles"
 
-    def execute(self, context):
-        scene = context.scene
+    def execute(self, context) -> Set[OperatorReturnItems]:
+        scene = get_mcsr_scene(context.scene)
         wm = context.window_manager
+
+        assert wm is not None, "Window manager is required for progress updates"
 
         output_path = bpy.path.abspath(scene.mcsr_output_path)
         if not output_path:
@@ -171,8 +183,8 @@ class TogglePreviewOperator(bpy.types.Operator):
     bl_label = "Toggle Preview"
     bl_description = "Toggle camera preview in viewport"
 
-    def execute(self, context):
-        scene = context.scene
+    def execute(self, context) -> Set[OperatorReturnItems]:
+        scene = get_mcsr_scene(context.scene)
         scene.mcsr_show_preview = not scene.mcsr_show_preview
 
         # Toggle preview directly
@@ -185,8 +197,8 @@ class TogglePreviewOperator(bpy.types.Operator):
         from .utils import cleanup_preview_cameras, create_preview_cameras
 
         cleanup_preview_cameras()
-
-        if context.scene.mcsr_show_preview:
+        scene = get_mcsr_scene(context.scene)
+        if scene.mcsr_show_preview:
             create_preview_cameras(context)
 
         # Force viewport update

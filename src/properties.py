@@ -16,8 +16,6 @@ from .constants import (
     DEFAULT_ORTHO_SCALE,
     DEFAULT_CLIP_START,
     DEFAULT_CLIP_END,
-    DEFAULT_DOF_DISTANCE,
-    DEFAULT_DOF_APERTURE,
     DEFAULT_SPACING,
     DEFAULT_OUTPUT_PATH,
 )
@@ -41,7 +39,7 @@ def register_properties():
     """Register all scene properties for the addon"""
 
     # Camera positioning
-    bpy.types.Scene.mcsr_camera_count = IntProperty(
+    bpy.types.Scene.mcsr_camera_count = IntProperty(  # type: ignore[misc]
         name="Camera Count",
         description="Number of cameras to render from",
         default=DEFAULT_CAMERA_COUNT,
@@ -50,7 +48,7 @@ def register_properties():
         update=update_preview,
     )
 
-    bpy.types.Scene.mcsr_distance = FloatProperty(
+    bpy.types.Scene.mcsr_distance = FloatProperty(  # type: ignore[misc]
         name="Distance",
         description="Distance from center to cameras",
         default=DEFAULT_DISTANCE,
@@ -60,7 +58,7 @@ def register_properties():
     )
 
     # Camera properties
-    bpy.types.Scene.mcsr_camera_type = EnumProperty(
+    bpy.types.Scene.mcsr_camera_type = EnumProperty(  # type: ignore[misc]
         name="Camera Type",
         description="Type of camera projection",
         items=[
@@ -71,7 +69,7 @@ def register_properties():
         update=update_preview,
     )
 
-    bpy.types.Scene.mcsr_focal_length = FloatProperty(
+    bpy.types.Scene.mcsr_focal_length = FloatProperty(  # type: ignore[misc]
         name="Focal Length",
         description="Camera focal length in mm",
         default=DEFAULT_FOCAL_LENGTH,
@@ -80,7 +78,7 @@ def register_properties():
         update=update_preview,
     )
 
-    bpy.types.Scene.mcsr_ortho_scale = FloatProperty(
+    bpy.types.Scene.mcsr_ortho_scale = FloatProperty(  # type: ignore[misc]
         name="Orthographic Scale",
         description="Orthographic scale",
         default=DEFAULT_ORTHO_SCALE,
@@ -89,7 +87,7 @@ def register_properties():
         update=update_preview,
     )
 
-    bpy.types.Scene.mcsr_clip_start = FloatProperty(
+    bpy.types.Scene.mcsr_clip_start = FloatProperty(  # type: ignore[misc]
         name="Clip Start",
         description="Camera near clipping distance",
         default=DEFAULT_CLIP_START,
@@ -98,7 +96,7 @@ def register_properties():
         update=update_preview,
     )
 
-    bpy.types.Scene.mcsr_clip_end = FloatProperty(
+    bpy.types.Scene.mcsr_clip_end = FloatProperty(  # type: ignore[misc]
         name="Clip End",
         description="Camera far clipping distance",
         default=DEFAULT_CLIP_END,
@@ -107,48 +105,15 @@ def register_properties():
         update=update_preview,
     )
 
-    # Depth of field
-    bpy.types.Scene.mcsr_use_dof = BoolProperty(
-        name="Use Depth of Field",
-        description="Enable depth of field for cameras",
-        default=False,
-        update=update_preview,
-    )
-
-    bpy.types.Scene.mcsr_dof_object = bpy.props.PointerProperty(
-        name="Focus Object",
-        description="Object to focus on (leave empty for manual distance)",
-        type=bpy.types.Object,
-        update=update_preview,
-    )
-
-    bpy.types.Scene.mcsr_dof_distance = FloatProperty(
-        name="Focus Distance",
-        description="Distance to focus point",
-        default=DEFAULT_DOF_DISTANCE,
-        min=0.0,
-        max=100000.0,
-        update=update_preview,
-    )
-
-    bpy.types.Scene.mcsr_dof_aperture = FloatProperty(
-        name="F-Stop",
-        description="Aperture f-stop value",
-        default=DEFAULT_DOF_APERTURE,
-        min=0.1,
-        max=64.0,
-        update=update_preview,
-    )
-
     # Output settings
-    bpy.types.Scene.mcsr_output_path = StringProperty(
+    bpy.types.Scene.mcsr_output_path = StringProperty(  # type: ignore[misc]
         name="Output Path",
         description="Directory to save rendered images",
         default=DEFAULT_OUTPUT_PATH,
         subtype="DIR_PATH",
     )
 
-    bpy.types.Scene.mcsr_spacing = IntProperty(
+    bpy.types.Scene.mcsr_spacing = IntProperty(  # type: ignore[misc]
         name="Sprite Spacing",
         description="Pixels between each sprite in the sheet",
         default=DEFAULT_SPACING,
@@ -157,14 +122,14 @@ def register_properties():
     )
 
     # Preview settings
-    bpy.types.Scene.mcsr_show_preview = BoolProperty(
+    bpy.types.Scene.mcsr_show_preview = BoolProperty(  # type: ignore[misc]
         name="Show Preview",
         description="Show camera positions in viewport",
         default=False,
     )
 
     # Future preview features (not currently used)
-    bpy.types.Scene.mcsr_preview_mode = bpy.props.EnumProperty(
+    bpy.types.Scene.mcsr_preview_mode = bpy.props.EnumProperty(  # type: ignore[misc]
         name="Preview Mode",
         description="How to preview camera views",
         items=[
@@ -175,7 +140,7 @@ def register_properties():
         default="NONE",
     )
 
-    bpy.types.Scene.mcsr_preview_camera_index = IntProperty(
+    bpy.types.Scene.mcsr_preview_camera_index = IntProperty(  # type: ignore[misc]
         name="Camera Index",
         description="Which camera to preview (0-based)",
         default=0,
@@ -198,10 +163,6 @@ def unregister_properties():
         "mcsr_ortho_scale",
         "mcsr_clip_start",
         "mcsr_clip_end",
-        "mcsr_use_dof",
-        "mcsr_dof_object",
-        "mcsr_dof_distance",
-        "mcsr_dof_aperture",
         "mcsr_output_path",
         "mcsr_spacing",
         "mcsr_show_preview",
@@ -212,4 +173,3 @@ def unregister_properties():
     for prop in props_to_remove:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)
-
