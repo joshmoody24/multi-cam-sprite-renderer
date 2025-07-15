@@ -310,6 +310,7 @@ def setup_compositor_nodes(
         file_output.base_path = temp_dir
         file_output.format.file_format = "PNG"
         file_output.format.color_mode = "RGBA"
+        file_output.format.color_depth = "8"
 
         # Clear default input and add named input
         file_output.file_slots.clear()
@@ -319,14 +320,155 @@ def setup_compositor_nodes(
         if pass_name == "lit":
             links.new(render_layers.outputs["Image"], file_output.inputs[0])
         elif pass_name == "diffuse":
-            links.new(render_layers.outputs["DiffCol"], file_output.inputs[0])
+            # Use Set Alpha node to ensure proper alpha channel
+            set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+            set_alpha.name = f"MCSR_SetAlpha_{pass_name}"
+            set_alpha.location = (x_offset - 100, y_offset)
+
+            links.new(render_layers.outputs["DiffCol"], set_alpha.inputs["Image"])
+            links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
+            links.new(set_alpha.outputs["Image"], file_output.inputs[0])
         elif pass_name == "specular":
-            links.new(render_layers.outputs["GlossCol"], file_output.inputs[0])
+            # Use Set Alpha node to ensure proper alpha channel
+            set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+            set_alpha.name = f"MCSR_SetAlpha_{pass_name}"
+            set_alpha.location = (x_offset - 100, y_offset)
+
+            links.new(render_layers.outputs["GlossCol"], set_alpha.inputs["Image"])
+            links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
+            links.new(set_alpha.outputs["Image"], file_output.inputs[0])
         elif pass_name == "normal":
-            # Simple passthrough from normal layer to output for performance
-            links.new(render_layers.outputs["Normal"], file_output.inputs[0])
+            # Create world-to-camera normal transformation
+            normal_transform_output = create_normal_transform_nodes(
+                scene, render_layers, x_offset, y_offset
+            )
+            links.new(normal_transform_output, file_output.inputs[0])
 
         y_offset -= 200
+
+
+def create_normal_transform_nodes(
+    scene: bpy.types.Scene,
+    render_layers: bpy.types.Node,
+    x_offset: int,
+    y_offset: int,
+):
+    """World‑space **Normal** → camera‑space compositor chain (matrix version).
+
+    Blender’s *Normal* render‑pass is world‑space, so we must multiply each
+    pixel’s normal by the camera’s rotation matrix **R = (world→camera)**.  A
+    pure rotation keeps lengths, so the inverse‑transpose is just `R`.  The
+    only tricky bit: **`Matrix[i]` in *mathutils* returns a *column*, not a row.**
+    We therefore feed **`Rᵀ` (the transpose)** into the nine Value nodes so
+    that each dot‑product uses the correct row.
+
+    Pipeline
+    ========
+    1. **SeparateXYZ** → Nx, Ny, Nz
+    2. For each camera axis (row of Rᵀ) build `dot(N, row)` via three *MULTIPLY*
+       and two *ADD* nodes → Cx, Cy, Cz
+    3. **Negate Cz** (Blender camera looks down −Z, but we want +Z = blue)
+    4. Remap −1…1 → 0…1 (×0.5 + 0.5)
+    5. **CombineXYZ** → **Set Alpha** (restore RenderLayers alpha)
+
+    The caller should populate the nine **MCSR_Rij** Value nodes each render:
+
+    ```python
+    R = cam.matrix_world.inverted().to_3x3().transposed()  # NOTE: transpose!
+    R[2] *= -1  # flip forward row so +Z faces camera
+    for r in range(3):
+        for c in range(3):
+            nt.nodes[f"MCSR_R{r}{c}"].outputs[0].default_value = R[r][c]
+    ```
+    """
+
+    nt = scene.node_tree
+    nodes, links = nt.nodes, nt.links
+
+    # ───────────────────────────── 0. Separate world normal
+    sep = nodes.new("CompositorNodeSeparateXYZ")
+    sep.name = "MCSR_SepWorldNormal"
+    sep.location = (x_offset - 400, y_offset + 200)
+    links.new(render_layers.outputs["Normal"], sep.inputs[0])
+
+    # Helper to create spaced Math nodes
+    def math_node(op, px, py, name=""):
+        m = nodes.new("CompositorNodeMath")
+        m.operation = op
+        m.location = (px, py)
+        m.name = name or f"MCSR_Math_{op}_{px}_{py}"
+        return m
+
+    # ───────────────────────────── 1. Matrix Value nodes (spaced in a 3×3 grid)
+    rot_values = {}
+    cell_w, cell_h = 120, 110  # spacing grid
+    base_x, base_y = x_offset - 900, y_offset + 350
+    for r in range(3):
+        for c in range(3):
+            v = nodes.new("CompositorNodeValue")
+            v.name = f"MCSR_R{r}{c}"
+            v.label = f"R{r}{c}"
+            v.location = (base_x + c * cell_w, base_y - r * cell_h)
+            rot_values[(r, c)] = v
+
+    # ───────────────────────────── 2. Dot‑product builder
+    def build_dot(axis, px, py):
+        mul0 = math_node("MULTIPLY", px, py)
+        mul1 = math_node("MULTIPLY", px, py - 60)
+        mul2 = math_node("MULTIPLY", px, py - 120)
+        add0 = math_node("ADD", px + 140, py - 30)
+        add1 = math_node("ADD", px + 280, py - 30)
+
+        links.new(sep.outputs["X"], mul0.inputs[0])
+        links.new(rot_values[(axis, 0)].outputs[0], mul0.inputs[1])
+        links.new(sep.outputs["Y"], mul1.inputs[0])
+        links.new(rot_values[(axis, 1)].outputs[0], mul1.inputs[1])
+        links.new(sep.outputs["Z"], mul2.inputs[0])
+        links.new(rot_values[(axis, 2)].outputs[0], mul2.inputs[1])
+
+        links.new(mul0.outputs[0], add0.inputs[0])
+        links.new(mul1.outputs[0], add0.inputs[1])
+        links.new(add0.outputs[0], add1.inputs[0])
+        links.new(mul2.outputs[0], add1.inputs[1])
+        return add1
+
+    cam_x = build_dot(0, x_offset - 120, y_offset + 180)
+    cam_y = build_dot(1, x_offset - 120, y_offset + 20)
+    cam_z = build_dot(2, x_offset - 120, y_offset - 140)
+
+    # ───────────────────────────── 3. Negate Cz then remap
+    neg_z = math_node("MULTIPLY", x_offset + 200, y_offset - 100, "MCSR_NegZ")
+    neg_z.inputs[1].default_value = -1.0
+    links.new(cam_z.outputs[0], neg_z.inputs[0])
+
+    def remap(src, px, py):
+        mul = math_node("MULTIPLY", px, py)
+        mul.inputs[1].default_value = 0.5
+        add = math_node("ADD", px + 140, py)
+        add.inputs[1].default_value = 0.5
+        links.new(src.outputs[0], mul.inputs[0])
+        links.new(mul.outputs[0], add.inputs[0])
+        return add
+
+    rem_x = remap(cam_x, x_offset + 420, y_offset + 180)
+    rem_y = remap(cam_y, x_offset + 420, y_offset + 20)
+    rem_z = remap(neg_z, x_offset + 420, y_offset - 100)
+
+    # ───────────────────────────── 4. Combine & Alpha restore (spaced)
+    comb = nodes.new("CompositorNodeCombineXYZ")
+    comb.name = "MCSR_CombineCamNorm"
+    comb.location = (x_offset + 680, y_offset + 60)
+    links.new(rem_x.outputs[0], comb.inputs[0])
+    links.new(rem_y.outputs[0], comb.inputs[1])
+    links.new(rem_z.outputs[0], comb.inputs[2])
+
+    set_alpha = nodes.new("CompositorNodeSetAlpha")
+    set_alpha.name = "MCSR_SetAlphaNorm"
+    set_alpha.location = (x_offset + 940, y_offset + 60)
+    links.new(comb.outputs[0], set_alpha.inputs["Image"])
+    links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
+
+    return set_alpha.outputs["Image"]
 
 
 class TempDirectoryManager:

@@ -78,12 +78,16 @@ class MultiCamSpriteRenderStillOperator(bpy.types.Operator):
 
                     apply_camera_settings(camera, scene)
                     point_camera_at_target(camera, center)
+                    assert (
+                        context.view_layer is not None
+                    ), "View layer should not be None"
+                    context.view_layer.update()  # needs to be called before the transformation matrix updates. This little line cost me 2 hours of debugging
+                    update_normal_matrix(scene, camera)
 
                     scene.camera = camera
 
                     # Update compositor file paths for this camera
                     update_compositor_file_paths(scene, enabled_passes, i)
-
                     # Render once - compositor will handle all file outputs
                     bpy.ops.render.render(write_still=False)
 
@@ -121,6 +125,18 @@ class MultiCamSpriteRenderStillOperator(bpy.types.Operator):
             f"Multi-view render complete! {camera_count} views saved to {output_path}",
         )
         return {"FINISHED"}
+
+
+def update_normal_matrix(scene, cam):
+    # world → camera rotation (rows are Right, Up, Forward-)
+    R = cam.matrix_world.inverted().to_3x3()  # ← NO .transposed()
+    # Flip forward row so +Z faces the camera
+    R[2] *= -1
+    for r in range(3):
+        for c in range(3):
+            node = scene.node_tree.nodes.get(f"MCSR_R{r}{c}")
+            assert node, f"Missing node MCSR_R{r}{c}"
+            node.outputs[0].default_value = R[r][c]
 
 
 class MultiCamSpriteRenderAnimationOperator(bpy.types.Operator):
