@@ -3,7 +3,7 @@
 import bpy
 import importlib
 
-from . import ui_panel, operators, properties, utils, constants, mcsr_types
+from . import ui_panel, operators, properties, utils, constants, mcsr_types, camera_utils
 
 # Reload modules when addon is reloaded
 if "bpy" in locals():
@@ -13,13 +13,18 @@ if "bpy" in locals():
     importlib.reload(utils)
     importlib.reload(constants)
     importlib.reload(mcsr_types)
+    importlib.reload(camera_utils)
 
 classes = (
     ui_panel.MultiCamSpriteRendererPanel,
     operators.MultiCamSpriteRenderStillOperator,
-    operators.MultiCamSpriteRenderAnimationOperator,
+    operators.RenderAllMcsrOperator,
     operators.TogglePreviewOperator,
+    operators.UpdatePreviewOperator,
     operators.ApplyRecommendedSettingsOperator,
+    operators.AddSelectedToMcsrOperator,
+    operators.RemoveFromMcsrOperator,
+    operators.SelectMcsrObjectOperator,
 )
 
 
@@ -33,4 +38,3 @@ def unregister():
     properties.unregister_properties()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-

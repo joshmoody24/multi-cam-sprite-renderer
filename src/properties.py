@@ -7,6 +7,8 @@ from bpy.props import (
     StringProperty,
     BoolProperty,
     EnumProperty,
+    PointerProperty,
+    CollectionProperty,
 )
 
 from .constants import (
@@ -23,29 +25,70 @@ from .constants import (
 
 def update_preview(self, context):
     """Refresh preview when camera settings change"""
-    if (
-        not hasattr(context.scene, "mcsr_show_preview")
-        or not context.scene.mcsr_show_preview
-    ):
+    if not context.scene.mcsr_show_preview:
         return
 
-    from .utils import cleanup_preview_cameras, create_preview_cameras
+    from .utils import cleanup_preview_cameras
+    from .camera_utils import create_preview_cameras
 
     cleanup_preview_cameras()
     create_preview_cameras(context)
 
 
-def register_properties():
-    """Register all scene properties for the addon"""
+class McsrObjectSettings(bpy.types.PropertyGroup):
+    """Per-object settings for Multi-Cam Sprite Renderer"""
+    reference_camera: PointerProperty(  # type: ignore[misc]
+        name="Reference Camera",
+        description="Camera to use as reference for position and settings",
+        type=bpy.types.Object,
+        poll=lambda self, obj: obj.type == 'CAMERA'
+    )
 
-    # Camera positioning
-    bpy.types.Scene.mcsr_camera_count = IntProperty(  # type: ignore[misc]
+    camera_count: IntProperty(  # type: ignore[misc]
         name="Camera Count",
         description="Number of cameras to render from",
         default=DEFAULT_CAMERA_COUNT,
         min=3,
         max=24,
-        update=update_preview,
+        update=update_preview
+    )
+    
+    output_path: StringProperty(  # type: ignore[misc]
+        name="Output Path",
+        description="Directory to save rendered images",
+        default=DEFAULT_OUTPUT_PATH,
+        subtype="DIR_PATH",
+    )
+
+
+class McsrObjectPointer(bpy.types.PropertyGroup):
+    """Reference to an object with MCSR settings"""
+    object: PointerProperty(  # type: ignore[misc]
+        name="Object",
+        description="Object with MCSR settings",
+        type=bpy.types.Object
+    )
+
+
+def register_properties():
+    """Register all properties for the addon"""
+    bpy.utils.register_class(McsrObjectSettings)
+    bpy.utils.register_class(McsrObjectPointer)
+    
+    # Add object settings
+    bpy.types.Object.mcsr = PointerProperty(type=McsrObjectSettings)  # type: ignore[misc]
+    
+    # Add active object selection and list to scene
+    bpy.types.Scene.mcsr_active_object = PointerProperty(  # type: ignore[misc]
+        name="Active MCSR Object",
+        description="Currently selected object for MCSR settings",
+        type=bpy.types.Object
+    )
+    
+    bpy.types.Scene.mcsr_objects = CollectionProperty(  # type: ignore[misc]
+        name="MCSR Objects",
+        description="Objects with MCSR settings",
+        type=McsrObjectPointer
     )
 
     bpy.types.Scene.mcsr_distance = FloatProperty(  # type: ignore[misc]
@@ -54,10 +97,8 @@ def register_properties():
         default=DEFAULT_DISTANCE,
         min=0.1,
         max=100.0,
-        update=update_preview,
     )
 
-    # Camera properties
     bpy.types.Scene.mcsr_camera_type = EnumProperty(  # type: ignore[misc]
         name="Camera Type",
         description="Type of camera projection",
@@ -66,7 +107,6 @@ def register_properties():
             ("ORTHO", "Orthographic", "Orthographic projection"),
         ],
         default="PERSP",
-        update=update_preview,
     )
 
     bpy.types.Scene.mcsr_focal_length = FloatProperty(  # type: ignore[misc]
@@ -75,7 +115,6 @@ def register_properties():
         default=DEFAULT_FOCAL_LENGTH,
         min=1.0,
         max=5000.0,
-        update=update_preview,
     )
 
     bpy.types.Scene.mcsr_ortho_scale = FloatProperty(  # type: ignore[misc]
@@ -84,7 +123,6 @@ def register_properties():
         default=DEFAULT_ORTHO_SCALE,
         min=0.001,
         max=10000.0,
-        update=update_preview,
     )
 
     bpy.types.Scene.mcsr_clip_start = FloatProperty(  # type: ignore[misc]
@@ -93,7 +131,6 @@ def register_properties():
         default=DEFAULT_CLIP_START,
         min=0.001,
         max=1000.0,
-        update=update_preview,
     )
 
     bpy.types.Scene.mcsr_clip_end = FloatProperty(  # type: ignore[misc]
@@ -102,15 +139,6 @@ def register_properties():
         default=DEFAULT_CLIP_END,
         min=0.001,
         max=100000.0,
-        update=update_preview,
-    )
-
-    # Output settings
-    bpy.types.Scene.mcsr_output_path = StringProperty(  # type: ignore[misc]
-        name="Output Path",
-        description="Directory to save rendered images",
-        default=DEFAULT_OUTPUT_PATH,
-        subtype="DIR_PATH",
     )
 
     bpy.types.Scene.mcsr_spacing = IntProperty(  # type: ignore[misc]
@@ -121,40 +149,18 @@ def register_properties():
         max=50,
     )
 
-    # Preview settings
     bpy.types.Scene.mcsr_show_preview = BoolProperty(  # type: ignore[misc]
         name="Show Preview",
         description="Show camera positions in viewport",
         default=False,
     )
 
-    # Future preview features (not currently used)
-    bpy.types.Scene.mcsr_preview_mode = bpy.props.EnumProperty(  # type: ignore[misc]
-        name="Preview Mode",
-        description="How to preview camera views",
-        items=[
-            ("NONE", "None", "No camera preview"),
-            ("SINGLE", "Single Camera", "Preview one camera at a time"),
-            ("GRID", "Grid View", "Preview all cameras in grid layout"),
-        ],
-        default="NONE",
-    )
-
-    bpy.types.Scene.mcsr_preview_camera_index = IntProperty(  # type: ignore[misc]
-        name="Camera Index",
-        description="Which camera to preview (0-based)",
-        default=0,
-        min=0,
-    )
-
-    # Scene configuration
     bpy.types.Scene.mcsr_pixel_art = BoolProperty(  # type: ignore[misc]
         name="Pixel Art",
         description="Enable pixel art mode (affects filtering)",
         default=False,
     )
 
-    # Render passes
     bpy.types.Scene.mcsr_render_lit = BoolProperty(  # type: ignore[misc]
         name="Lit",
         description="Render standard lit pass",
@@ -179,7 +185,6 @@ def register_properties():
         default=False,
     )
 
-    # Debug settings
     bpy.types.Scene.mcsr_show_debug = BoolProperty(  # type: ignore[misc]
         name="Show Debug",
         description="Show debug options",
@@ -199,29 +204,12 @@ def unregister_properties():
 
     cleanup_preview_cameras()
 
-    # Remove all registered properties
-    props_to_remove = [
-        "mcsr_camera_count",
-        "mcsr_distance",
-        "mcsr_camera_type",
-        "mcsr_focal_length",
-        "mcsr_ortho_scale",
-        "mcsr_clip_start",
-        "mcsr_clip_end",
-        "mcsr_output_path",
-        "mcsr_spacing",
-        "mcsr_show_preview",
-        "mcsr_preview_mode",
-        "mcsr_preview_camera_index",
-        "mcsr_pixel_art",
-        "mcsr_render_lit",
-        "mcsr_render_diffuse",
-        "mcsr_render_specular",
-        "mcsr_render_normal",
-        "mcsr_show_debug",
-        "mcsr_debug_preserve_compositor",
-    ]
+    # Remove object settings
+    bpy.utils.unregister_class(McsrObjectSettings)
+    bpy.utils.unregister_class(McsrObjectPointer)
+    del bpy.types.Object.mcsr
 
-    for prop in props_to_remove:
-        if hasattr(bpy.types.Scene, prop):
+    # Remove all scene properties
+    for prop in dir(bpy.types.Scene):
+        if prop.startswith("mcsr_"):
             delattr(bpy.types.Scene, prop)

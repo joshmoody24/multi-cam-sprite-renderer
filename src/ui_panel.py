@@ -14,36 +14,64 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        self._draw_camera_settings(layout, scene)
-        self._draw_sprite_settings(layout, scene)
-        self._draw_scene_configuration(layout, scene)
-        self._draw_preview_settings(layout, scene)
-        self._draw_debug_settings(layout, scene)
-        self._draw_render_buttons(layout, scene)
-
-    def _draw_camera_settings(self, layout, scene):
-        """Draw camera settings section"""
+        # Object management
         box = layout.box()
-        box.label(text="Camera Settings", icon="CAMERA_DATA")
-        box.prop(scene, "mcsr_camera_count")
-        box.prop(scene, "mcsr_distance")
+        box.label(text="MCSR Objects", icon="OUTLINER_OB_MESH")
 
-        box.separator()
-        box.prop(scene, "mcsr_camera_type")
-        if scene.mcsr_camera_type == "PERSP":
-            box.prop(scene, "mcsr_focal_length")
+        row = box.row()
+        row.operator("mcsr.add_selected", text="Add Selected", icon="ADD")
+        row.operator("mcsr.remove_active", text="Remove Active", icon="REMOVE")
+
+        # Object list
+        if len(scene.mcsr_objects) > 0:
+            box.separator()
+            for item in scene.mcsr_objects:
+                obj = item.object
+                if not obj:
+                    continue
+
+                row = box.row()
+                op = row.operator(
+                    "mcsr.select_object",
+                    text=obj.name,
+                    depress=(obj == scene.mcsr_active_object),
+                    icon=(
+                        "RADIOBUT_ON"
+                        if obj == scene.mcsr_active_object
+                        else "RADIOBUT_OFF"
+                    ),
+                )
+                op.object_name = obj.name
+
+        # Settings for active object
+        active_object = scene.mcsr_active_object
+        if active_object:
+            box = layout.box()
+            box.label(text=f"Settings for {active_object.name}", icon="SETTINGS")
+            box.prop_search(
+                active_object.mcsr,
+                "reference_camera",
+                context.scene,
+                "objects",
+                text="Camera",
+            )
+            if active_object.mcsr.reference_camera:
+                box.prop(active_object.mcsr, "camera_count")
+                box.prop(active_object.mcsr, "output_path")
+
+            self._draw_sprite_settings(layout, scene)
+            self._draw_scene_configuration(layout, scene)
+            self._draw_preview_settings(layout, scene)
+            self._draw_debug_settings(layout, scene)
+            self._draw_render_buttons(layout, scene, active_object)
         else:
-            box.prop(scene, "mcsr_ortho_scale")
-
-        box.prop(scene, "mcsr_clip_start")
-        box.prop(scene, "mcsr_clip_end")
+            layout.label(text="Select an MCSR object to configure", icon="INFO")
 
     def _draw_sprite_settings(self, layout, scene):
         """Draw sprite sheet settings section"""
         box = layout.box()
         box.label(text="Sprite Sheet Settings", icon="IMAGE_DATA")
         box.prop(scene, "mcsr_spacing")
-        box.prop(scene, "mcsr_output_path")
 
     def _draw_scene_configuration(self, layout, scene):
         """Draw scene configuration section"""
@@ -70,10 +98,14 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         """Draw preview settings section"""
         box = layout.box()
         box.label(text="Preview", icon="HIDE_OFF")
+        row = box.row()
         if scene.mcsr_show_preview:
-            box.operator("mcsr.toggle_preview", text="Hide Preview", icon="HIDE_OFF")
+            row.operator("mcsr.toggle_preview", text="Hide Preview", icon="HIDE_OFF")
+            row.operator(
+                "mcsr.update_preview", text="Update Preview", icon="FILE_REFRESH"
+            )
         else:
-            box.operator("mcsr.toggle_preview", text="Show Preview", icon="HIDE_ON")
+            row.operator("mcsr.toggle_preview", text="Show Preview", icon="HIDE_ON")
 
     def _draw_debug_settings(self, layout, scene):
         """Draw debug settings section"""
@@ -98,11 +130,15 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         if getattr(scene, "mcsr_show_debug", False):
             box.prop(scene, "mcsr_debug_preserve_compositor")
 
-    def _draw_render_buttons(self, layout, scene):
+    def _draw_render_buttons(self, layout, scene, active_object):
         """Draw render buttons section"""
         box = layout.box()
         box.label(text="Render", icon="RENDER_STILL")
-        box.operator("mcsr.render_still", text="Render Image", icon="RENDER_STILL")
         box.operator(
-            "mcsr.render_animation", text="Render Animation", icon="RENDER_ANIMATION"
+            "mcsr.render_still",
+            text=f"Render {active_object.name}",
+            icon="RENDER_STILL",
+        )
+        box.operator(
+            "mcsr.render_all", text="Render All MCSR Objects", icon="RENDER_STILL"
         )
