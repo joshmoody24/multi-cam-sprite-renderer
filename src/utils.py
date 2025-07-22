@@ -355,6 +355,10 @@ def create_normal_transform_nodes(
 ):
     """World‑space **Normal** → camera‑space compositor chain (matrix version).
 
+    Of course Blender 4.5 adds a vector math node to the compositor
+    the DAY AFTER I raw dogged all the math with scalars. But I'm
+    keeping it this way for backwards compatibility.
+
     Blender’s *Normal* render‑pass is world‑space, so we must multiply each
     pixel’s normal by the camera’s rotation matrix **R = (world→camera)**.  A
     pure rotation keeps lengths, so the inverse‑transpose is just `R`.  The
