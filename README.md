@@ -1,4 +1,4 @@
-## Overview
+# Overview
 
 multi-cam-sprite-renderer is a Blender plugin for pre-rendering normal-mapped sprites from 3D models.
 
@@ -20,4 +20,4 @@ The base color of this sprite is just solid blue. The texture comes from the nor
 
 ## Status
 
-This project is in extremely early phases right now and probably shouldn't be used by anyone but the author.
+This project is in extremely early phases right now and probably shouldn't be used by anyone but the author. Check out [ROADMAP.md](ROADMAP.md) to see what features are planned.
