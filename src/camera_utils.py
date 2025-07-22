@@ -1,0 +1,121 @@
+"""Camera reference system utilities for Multi-Cam Sprite Renderer"""
+
+import bpy
+from mathutils import Vector, Matrix
+import math
+from .constants import (
+    PREVIEW_COLLECTION_NAME,
+    PREVIEW_PARENT_NAME,
+    PREVIEW_CAMERA_PREFIX,
+    PREVIEW_COLOR,
+)
+from .utils import point_camera_at_target
+
+
+def clone_camera(reference_camera):
+    """Create a new camera with the same settings as the reference camera"""
+    if not reference_camera:
+        raise ValueError("Reference camera is required")
+
+    new_camera = bpy.data.objects.new(
+        name="MCSR_Temp_Camera", object_data=reference_camera.data.copy()
+    )
+    new_camera.rotation_euler = reference_camera.rotation_euler.copy()
+    bpy.context.scene.collection.objects.link(new_camera)
+    return new_camera
+
+
+def calculate_camera_positions(
+    center, camera_count, reference_camera, include_reference=True
+):
+    """Generate camera positions around center point, preserving reference camera orientation
+
+    Args:
+        center: Center point to rotate around
+        camera_count: Total number of cameras
+        reference_camera: Camera to use as reference for position and orientation
+        include_reference: If True, includes reference position and spaces remaining positions.
+                         If False, creates evenly spaced positions excluding reference position.
+
+    Returns:
+        List of tuples (position, rotation), where rotation is a euler rotation
+    """
+    if not reference_camera:
+        raise ValueError("Reference camera is required")
+
+    positions = []
+    ref_to_center = center - reference_camera.location
+    ref_rotation = reference_camera.rotation_euler.copy()
+
+    if include_reference:
+        positions.append((reference_camera.location.copy(), ref_rotation.copy()))
+
+    for i in range(1, camera_count):
+        angle = (i / camera_count) * 2 * math.pi
+        rotation_matrix = Matrix.Rotation(angle, 4, "Z")
+
+        # Calculate position
+        offset = rotation_matrix @ ref_to_center
+        position = center - offset
+
+        # Calculate rotation by applying the same angle to reference rotation
+        rotation = ref_rotation.copy()
+        rotation.rotate(rotation_matrix)
+
+        positions.append((position, rotation))
+
+    return positions
+
+
+def create_preview_cameras(context):
+    """Create preview cameras using object settings"""
+    scene = context.scene
+    target_object = scene.mcsr_active_object
+
+    if not target_object or not target_object.mcsr.reference_camera:
+        return
+
+    # Create preview collection if it doesn't exist
+    preview_collection = bpy.data.collections.get(PREVIEW_COLLECTION_NAME)
+    if not preview_collection:
+        preview_collection = bpy.data.collections.new(PREVIEW_COLLECTION_NAME)
+        context.scene.collection.children.link(preview_collection)
+
+    # Create parent empty object
+    bpy.ops.object.empty_add(type="PLAIN_AXES", location=target_object.location)
+    parent_empty = context.active_object
+    parent_empty.name = PREVIEW_PARENT_NAME
+    parent_empty.empty_display_size = 0.5
+    parent_empty.hide_render = True
+    parent_empty.hide_select = True
+    parent_empty.color = PREVIEW_COLOR
+
+    # Move parent to preview collection
+    if parent_empty.name in context.scene.collection.objects:
+        context.scene.collection.objects.unlink(parent_empty)
+    preview_collection.objects.link(parent_empty)
+
+    # Calculate camera positions
+    center = target_object.location
+    camera_count = target_object.mcsr.camera_count
+    reference_camera = target_object.mcsr.reference_camera
+    camera_positions = calculate_camera_positions(
+        center, camera_count, reference_camera, include_reference=False
+    )
+
+    # Create preview cameras
+    for i, (position, rotation) in enumerate(camera_positions):
+        camera = clone_camera(reference_camera)
+        camera.name = f"{PREVIEW_CAMERA_PREFIX}{i:02d}"
+        camera.location = position
+        camera.rotation_euler = rotation
+
+        camera.hide_render = True
+        camera.hide_select = True
+        camera.color = PREVIEW_COLOR
+
+        # Parent camera to the empty object and move to collection
+        camera.parent = parent_empty
+        if camera.name in context.scene.collection.objects:
+            context.scene.collection.objects.unlink(camera)
+        preview_collection.objects.link(camera)

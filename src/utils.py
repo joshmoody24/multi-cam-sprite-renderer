@@ -296,6 +296,10 @@ def setup_compositor_nodes(
     render_layers.name = "MCSR_RenderLayers"
     render_layers.location = (0, 0)
 
+    # If normal pass is enabled, create the nodes to transform the normals to camera-space
+    if "normal" in passes:
+        create_normal_transform_nodes(scene, render_layers, 400, 0)
+
     # Create file output node for each pass
     x_offset = 400
     y_offset = 0
@@ -338,10 +342,8 @@ def setup_compositor_nodes(
             links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
             links.new(set_alpha.outputs["Image"], file_output.inputs[0])
         elif pass_name == "normal":
-            # Create world-to-camera normal transformation
-            normal_transform_output = create_normal_transform_nodes(
-                scene, render_layers, x_offset, y_offset
-            )
+            # Connect to already created normal transform nodes
+            normal_transform_output = scene.node_tree.nodes["MCSR_SetAlphaNorm"].outputs["Image"]
             links.new(normal_transform_output, file_output.inputs[0])
 
         y_offset -= 200
