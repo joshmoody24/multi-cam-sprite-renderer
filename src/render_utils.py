@@ -83,6 +83,7 @@ def generate_metadata_dict(
     fps: float,
     frame_width: int,
     frame_height: int,
+    frame_durations: Optional[Dict[str, List[List[int]]]] = None,
 ) -> Dict[str, Any]:
     """
     Generate metadata dictionary according to roadmap specification.
@@ -96,18 +97,44 @@ def generate_metadata_dict(
         fps: Frames per second for animations
         frame_width: Width of individual frames in pixels
         frame_height: Height of individual frames in pixels
+        frame_durations: Dict mapping pass names to lists of frame durations per action
 
     Returns:
         Dictionary with metadata structure ready for JSON serialization
     """
     actions_data = []
-    for action in actions_to_render:
+    for action_idx, action in enumerate(actions_to_render):
         if action:
-            frame_count = int(action.frame_range[1] - action.frame_range[0] + 1)
+            original_frame_count = int(
+                action.frame_range[1] - action.frame_range[0] + 1
+            )
         else:
-            frame_count = 1
+            original_frame_count = 1
 
-        action_data = {"frameCount": frame_count, "frameIndexDurationOverride": {}}
+        # Use actual rendered frame count if frame durations are provided
+        if frame_durations:
+            # Assume all passes have the same frame structure, use first pass
+            first_pass = next(iter(frame_durations.keys()))
+            if action_idx < len(frame_durations[first_pass]):
+                actual_frame_count = len(frame_durations[first_pass][action_idx])
+                # Create duration overrides for frames that last longer than 1
+                duration_overrides = {}
+                for frame_idx, duration in enumerate(
+                    frame_durations[first_pass][action_idx]
+                ):
+                    if duration > 1:
+                        duration_overrides[str(frame_idx)] = duration
+            else:
+                actual_frame_count = original_frame_count
+                duration_overrides = {}
+        else:
+            actual_frame_count = original_frame_count
+            duration_overrides = {}
+
+        action_data = {
+            "frameCount": actual_frame_count,
+            "frameIndexDurationOverride": duration_overrides,
+        }
         actions_data.append(action_data)
 
     return {
@@ -216,3 +243,131 @@ def update_normal_matrix(scene: bpy.types.Scene, camera: bpy.types.Object) -> No
             assert node, f"Missing node MCSR_R{r}{c}"
             node.outputs[0].default_value = R[r][c]
 
+
+def are_images_very_similar(image_path1: str, image_path2: str) -> bool:
+    """
+    Compare two images to determine if they are visually very similar.
+    Uses fuzzy comparison to handle noise and small rendering variations.
+
+    Args:
+        image_path1: Path to the first image
+        image_path2: Path to the second image
+
+    Returns:
+        True if images are considered very similar (duplicates)
+    """
+    if not os.path.exists(image_path1) or not os.path.exists(image_path2):
+        print(
+            f"[MCSR DEBUG] Similarity: One or both files don't exist: {os.path.basename(image_path1)}, {os.path.basename(image_path2)}"
+        )
+        return False
+
+    # Load both images using Blender
+    temp_image1 = bpy.data.images.load(image_path1)
+    temp_image2 = bpy.data.images.load(image_path2)
+
+    try:
+        # Basic dimension check - convert to tuples for proper comparison
+        size1 = (temp_image1.size[0], temp_image1.size[1])
+        size2 = (temp_image2.size[0], temp_image2.size[1])
+        if size1 != size2:
+            print(f"[MCSR DEBUG] Similarity: Different dimensions - {size1} vs {size2}")
+            return False
+
+        # Get pixel data
+        pixels1 = list(temp_image1.pixels)
+        pixels2 = list(temp_image2.pixels)
+
+        if len(pixels1) != len(pixels2):
+            print(
+                f"[MCSR DEBUG] Similarity: Different pixel counts - {len(pixels1)} vs {len(pixels2)}"
+            )
+            return False
+
+        width, height = size1[0], size1[1]
+
+        # Sample pixels in a grid pattern for fuzzy comparison
+        sample_size = 8  # 8x8 grid of samples
+        step_x = max(1, width // sample_size)
+        step_y = max(1, height // sample_size)
+
+        total_diff = 0.0
+        sample_count = 0
+
+        for y in range(0, height, step_y):
+            for x in range(0, width, step_x):
+                if y < height and x < width:
+                    pixel_idx = (y * width + x) * 4
+                    if pixel_idx + 2 < len(pixels1):
+                        # Compare RGB values (ignore alpha for now)
+                        r1, g1, b1 = (
+                            pixels1[pixel_idx],
+                            pixels1[pixel_idx + 1],
+                            pixels1[pixel_idx + 2],
+                        )
+                        r2, g2, b2 = (
+                            pixels2[pixel_idx],
+                            pixels2[pixel_idx + 1],
+                            pixels2[pixel_idx + 2],
+                        )
+
+                        # Calculate luminance difference
+                        lum1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1
+                        lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2
+
+                        total_diff += abs(lum1 - lum2)
+                        sample_count += 1
+
+        if sample_count == 0:
+            print(f"[MCSR DEBUG] Similarity: No samples could be compared")
+            return False
+
+        avg_diff = total_diff / sample_count
+        similarity_threshold = 0.00003  # average luminance difference threshold - only very small differences
+
+        is_similar = avg_diff < similarity_threshold
+
+        print(
+            f"[MCSR DEBUG] Similarity: {os.path.basename(image_path1)} vs {os.path.basename(image_path2)} - avg_diff: {avg_diff:.4f}, similar: {is_similar}"
+        )
+
+        return is_similar
+
+    finally:
+        bpy.data.images.remove(temp_image1, do_unlink=True)
+        bpy.data.images.remove(temp_image2, do_unlink=True)
+
+
+def should_skip_duplicate_frame(
+    current_image_path: str, previous_image_path: Optional[str]
+) -> Tuple[bool, str]:
+    """
+    Check if current frame should be skipped due to being very similar to previous frame.
+
+    Args:
+        current_image_path: Path to the current rendered frame
+        previous_image_path: Path to the previous frame (if any)
+
+    Returns:
+        Tuple of (should_skip, current_image_path)
+        - should_skip: True if frame should be skipped
+        - current_image_path: Path to current frame for next comparison
+    """
+    if previous_image_path is None:
+        print(
+            f"[MCSR DEBUG] Skip: First frame, never skip - {os.path.basename(current_image_path)}"
+        )
+        return False, current_image_path
+
+    should_skip = are_images_very_similar(current_image_path, previous_image_path)
+
+    if should_skip:
+        print(
+            f"[MCSR DEBUG] Skip: DUPLICATE DETECTED - {os.path.basename(current_image_path)} (very similar to previous)"
+        )
+    else:
+        print(
+            f"[MCSR DEBUG] Skip: Different frame - {os.path.basename(current_image_path)} (sufficiently different from previous)"
+        )
+
+    return should_skip, current_image_path

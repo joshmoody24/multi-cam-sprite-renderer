@@ -20,7 +20,115 @@ from ..render_utils import (
     save_metadata_json,
     create_animation_from_frames,
     update_normal_matrix,
+    should_skip_duplicate_frame,
 )
+
+
+def collect_frame_paths(
+    temp_dir: str, current_frame: int, enabled_passes: list
+) -> dict:
+    """Collect all frame paths for a rendered frame"""
+    frame_paths = {}
+    for pass_name in enabled_passes:
+        frame_filename = f"{pass_name}{current_frame:04d}.png"
+        frame_path = os.path.join(temp_dir, frame_filename)
+        assert os.path.exists(frame_path), f"Rendered frame not found: {frame_path}"
+        frame_paths[pass_name] = frame_path
+    return frame_paths
+
+
+def setup_duplicate_detection(scene, enabled_passes: list, frame_count: int) -> dict:
+    """Setup duplicate detection tracking and return tracker state"""
+    tracker = {
+        "enabled": scene.mcsr_skip_duplicate_frames,
+        "first_pass": enabled_passes[0] if enabled_passes else None,
+        "previous_frame_path": None,
+    }
+
+    if tracker["enabled"]:
+        print(
+            f"[MCSR DEBUG] Render: Duplicate frame skipping ENABLED for {frame_count} frames across {len(enabled_passes)} passes: {enabled_passes}"
+        )
+        print(
+            f"[MCSR DEBUG] Render: Using '{tracker['first_pass']}' pass as reference for duplicate detection"
+        )
+    else:
+        print(f"[MCSR DEBUG] Render: Duplicate frame skipping DISABLED")
+
+    return tracker
+
+
+def process_duplicate_detection(
+    frame_paths: dict, frame_offset: int, duplicate_tracker: dict
+) -> tuple:
+    """Process duplicate detection and return (should_skip, updated_tracker)"""
+    should_skip_frame = False
+
+    if duplicate_tracker["enabled"]:
+        print(
+            f"[MCSR DEBUG] Render: Checking frame {frame_offset+1} using '{duplicate_tracker['first_pass']}' pass for duplicate detection"
+        )
+        should_skip_frame, current_frame_path = should_skip_duplicate_frame(
+            frame_paths[duplicate_tracker["first_pass"]],
+            duplicate_tracker["previous_frame_path"],
+        )
+        duplicate_tracker["previous_frame_path"] = current_frame_path
+
+    return should_skip_frame, duplicate_tracker
+
+
+def extend_frame_durations(
+    frame_offset: int, frame_durations: dict, enabled_passes: list
+) -> None:
+    """Extend the duration of the previous frame for all passes"""
+    print(
+        f"[MCSR DEBUG] Render: Frame {frame_offset+1} skipped for ALL passes - extending previous frame durations"
+    )
+    for pass_name in enabled_passes:
+        if frame_durations[pass_name]:
+            old_duration = frame_durations[pass_name][-1]
+            frame_durations[pass_name][-1] += 1
+            print(
+                f"[MCSR DEBUG] Render: Pass '{pass_name}' - extending previous frame duration from {old_duration} to {frame_durations[pass_name][-1]}"
+            )
+
+
+def add_frame_to_passes(
+    frame_offset: int,
+    frame_paths: dict,
+    all_pass_frames: dict,
+    frame_durations: dict,
+    enabled_passes: list,
+) -> None:
+    """Add new frame to all passes with duration of 1"""
+    print(f"[MCSR DEBUG] Render: Frame {frame_offset+1} added for ALL passes")
+    for pass_name in enabled_passes:
+        all_pass_frames[pass_name].append(frame_paths[pass_name])
+        frame_durations[pass_name].append(1)
+        print(
+            f"[MCSR DEBUG] Render: Pass '{pass_name}' - frame added (total frames: {len(all_pass_frames[pass_name])})"
+        )
+
+
+def create_final_pass_animations(
+    all_pass_frames: dict, camera_folder: str, enabled_passes: list, render_params: dict
+) -> None:
+    """Create final animation files for each pass"""
+    for pass_name in enabled_passes:
+        frames = all_pass_frames[pass_name]
+        final_path = os.path.join(camera_folder, f"{pass_name}.png")
+
+        if len(frames) > 1:
+            create_animation_from_frames(
+                frames,
+                final_path,
+                render_params["actual_render_x"],
+                render_params["actual_render_y"],
+                render_params["grid_cols"],
+                render_params["grid_rows"],
+            )
+        elif len(frames) == 1:
+            shutil.copy2(frames[0], final_path)
 
 
 class MultiCamSpriteRenderOperator(McsrOperator):
@@ -47,6 +155,11 @@ class MultiCamSpriteRenderOperator(McsrOperator):
             # Store render_params for access in other methods
             self._render_params = render_params
 
+            # Initialize frame durations tracking for metadata
+            self._frame_durations = {
+                pass_name: [] for pass_name in render_params["enabled_passes"]
+            }
+
             # Execute the main rendering pipeline
             self._render_all_actions(context, render_context)
 
@@ -56,6 +169,7 @@ class MultiCamSpriteRenderOperator(McsrOperator):
                 scene.render.fps,
                 render_params["actual_render_x"],
                 render_params["actual_render_y"],
+                self._frame_durations if scene.mcsr_skip_duplicate_frames else None,
             )
             save_metadata_json(metadata_dict, render_params["output_path"])
 
@@ -312,66 +426,60 @@ class MultiCamSpriteRenderOperator(McsrOperator):
 
         # Use temp directory for individual frames
         with tempfile.TemporaryDirectory() as temp_dir:
-
-            # Set up compositor once for all passes for this camera
             setup_compositor_nodes(scene, temp_dir, enabled_passes)
             scene.render.use_compositing = True
 
-            # Render each frame (this will output all passes simultaneously)
             all_pass_frames = {pass_name: [] for pass_name in enabled_passes}
+            frame_durations = {pass_name: [] for pass_name in enabled_passes}
+            duplicate_tracker = setup_duplicate_detection(
+                scene, enabled_passes, frame_count
+            )
 
             for frame_offset in range(frame_count):
                 current_frame = start_frame + frame_offset
+
+                # Set frame and update progress
                 scene.frame_set(current_frame)
-
-                # Update progress (count per frame, not per pass)
                 render_context["wm"].progress_update(render_context["step"])
-                render_context["step"] += len(enabled_passes)  # Account for all passes
-
-                # Progress message
+                render_context["step"] += len(enabled_passes)
                 progress_msg = f"Action {action_idx+1}/{len(actions_to_render)}, Camera {camera_idx+1}/{camera_count}, Frame {frame_offset+1}/{frame_count}"
                 self.report({"INFO"}, progress_msg)
 
-                # Update normal matrix if needed
                 if "normal" in enabled_passes:
                     update_normal_matrix(scene, camera)
 
-                # Update file output paths for this frame
                 self._update_all_pass_outputs(
                     scene, enabled_passes, temp_dir, frame_offset
                 )
-
-                # Single render call outputs all passes
                 bpy.ops.render.render(write_still=True)
 
-                # Collect frame paths for each pass
-                # Blender File Output node automatically appends frame numbers
-                for pass_name in enabled_passes:
-                    # Blender appends the current frame number (4-digit padded)
-                    frame_filename = f"{pass_name}{current_frame:04d}.png"
-                    frame_path = os.path.join(temp_dir, frame_filename)
-                    assert os.path.exists(
-                        frame_path
-                    ), f"Rendered frame not found: {frame_path}"
-                    all_pass_frames[pass_name].append(frame_path)
+                frame_paths = collect_frame_paths(
+                    temp_dir, current_frame, enabled_passes
+                )
 
-            # Create final animation files for each pass
-            for pass_name in enabled_passes:
-                frames = all_pass_frames[pass_name]
-                final_path = os.path.join(camera_folder, f"{pass_name}.png")
+                should_skip_frame, duplicate_tracker = process_duplicate_detection(
+                    frame_paths, frame_offset, duplicate_tracker
+                )
 
-                if len(frames) > 1:
-                    create_animation_from_frames(
-                        frames,
-                        final_path,
-                        render_params["actual_render_x"],
-                        render_params["actual_render_y"],
-                        render_params["grid_cols"],
-                        render_params["grid_rows"],
+                if should_skip_frame:
+                    extend_frame_durations(
+                        frame_offset, frame_durations, enabled_passes
                     )
-                elif len(frames) == 1:
-                    # Single frame, copy it
-                    shutil.copy2(frames[0], final_path)
+                else:
+                    add_frame_to_passes(
+                        frame_offset,
+                        frame_paths,
+                        all_pass_frames,
+                        frame_durations,
+                        enabled_passes,
+                    )
+
+            for pass_name in enabled_passes:
+                self._frame_durations[pass_name].append(frame_durations[pass_name])
+
+            create_final_pass_animations(
+                all_pass_frames, camera_folder, enabled_passes, render_params
+            )
 
     def _update_all_pass_outputs(self, scene, enabled_passes, temp_dir, frame_offset):
         """Update file output paths for all passes"""

@@ -69,6 +69,7 @@ if TYPE_CHECKING:
 
         # Scene configuration
         mcsr_pixel_art: bool
+        mcsr_skip_duplicate_frames: bool
 
         # Render passes
         mcsr_render_lit: bool
