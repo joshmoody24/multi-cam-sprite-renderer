@@ -1,7 +1,7 @@
 """Camera reference system utilities for Multi-Cam Sprite Renderer"""
 
 import bpy
-from mathutils import Vector, Matrix
+from mathutils import Matrix
 import math
 from .constants import (
     PREVIEW_COLLECTION_NAME,
@@ -9,7 +9,7 @@ from .constants import (
     PREVIEW_CAMERA_PREFIX,
     PREVIEW_COLOR,
 )
-from .utils import point_camera_at_target
+from .mcsr_types import get_mcsr_object
 
 
 def clone_camera(reference_camera):
@@ -21,6 +21,7 @@ def clone_camera(reference_camera):
         name="MCSR_Temp_Camera", object_data=reference_camera.data.copy()
     )
     new_camera.rotation_euler = reference_camera.rotation_euler.copy()
+    assert bpy.context.scene is not None, "Scene context is required"
     bpy.context.scene.collection.objects.link(new_camera)
     return new_camera
 
@@ -70,7 +71,7 @@ def calculate_camera_positions(
 def create_preview_cameras(context):
     """Create preview cameras using object settings"""
     scene = context.scene
-    target_object = scene.mcsr_active_object
+    target_object = get_mcsr_object(scene.mcsr_active_object)
 
     if not target_object or not target_object.mcsr.reference_camera:
         return

@@ -19,3 +19,6 @@ DEFAULT_OUTPUT_PATH = "//renders/"
 
 # UI colors
 PREVIEW_COLOR = (1.0, 0.5, 0.0, 1.0)  # Orange
+
+# Render limits
+MAX_TEXTURE_SIZE = 16384  # Maximum texture dimension (GPU limit)

@@ -1,23 +1,18 @@
 """Multi-Cam Sprite Renderer - Blender addon for creating sprite sheets from multiple camera angles"""
 
+import sys
+
+# Module cleanup disabled to prevent conflicts with Blender's extension system
+
 import bpy
 import importlib
 
-from . import ui_panel, operators, properties, utils, constants, mcsr_types, camera_utils
-
-# Reload modules when addon is reloaded
-if "bpy" in locals():
-    importlib.reload(ui_panel)
-    importlib.reload(operators)
-    importlib.reload(properties)
-    importlib.reload(utils)
-    importlib.reload(constants)
-    importlib.reload(mcsr_types)
-    importlib.reload(camera_utils)
+from . import ui_panel, properties, utils, constants, mcsr_types, camera_utils, render_utils
+from . import operators
 
 classes = (
     ui_panel.MultiCamSpriteRendererPanel,
-    operators.MultiCamSpriteRenderStillOperator,
+    operators.MultiCamSpriteRenderOperator,
     operators.RenderAllMcsrOperator,
     operators.TogglePreviewOperator,
     operators.UpdatePreviewOperator,
@@ -25,6 +20,8 @@ classes = (
     operators.AddSelectedToMcsrOperator,
     operators.RemoveFromMcsrOperator,
     operators.SelectMcsrObjectOperator,
+    operators.AddActionOperator,
+    operators.RemoveActionOperator,
 )
 
 
