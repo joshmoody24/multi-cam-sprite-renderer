@@ -1,6 +1,7 @@
 """UI panel for the Multi-Cam Sprite Renderer addon"""
 
 import bpy
+from .mcsr_types import get_mcsr_scene, get_mcsr_object
 
 
 class MultiCamSpriteRendererPanel(bpy.types.Panel):
@@ -12,7 +13,10 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
+        scene = get_mcsr_scene(context.scene)
+
+        assert scene is not None, "Scene context is required"
+        assert layout is not None, "Layout context is required"
 
         # Object management
         box = layout.box()
@@ -44,7 +48,7 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
                 op.object_name = obj.name
 
         # Settings for active object
-        active_object = scene.mcsr_active_object
+        active_object = get_mcsr_object(scene.mcsr_active_object)
         if active_object:
             box = layout.box()
             box.label(text=f"Settings for {active_object.name}", icon="SETTINGS")
@@ -59,6 +63,7 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
                 box.prop(active_object.mcsr, "camera_count")
                 box.prop(active_object.mcsr, "output_path")
 
+            self._draw_action_settings(layout, active_object.mcsr)
             self._draw_sprite_settings(layout, scene)
             self._draw_scene_configuration(layout, scene)
             self._draw_preview_settings(layout, scene)
@@ -72,6 +77,19 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         box = layout.box()
         box.label(text="Sprite Sheet Settings", icon="IMAGE_DATA")
         box.prop(scene, "mcsr_spacing")
+
+    def _draw_action_settings(self, layout, mcsr_settings):
+        """Draw action settings section"""
+        box = layout.box()
+        box.label(text="Action Settings", icon="ACTION")
+
+        row = box.row()
+        row.operator("mcsr.add_action", text="Add Action", icon="ADD")
+        row.operator("mcsr.remove_action", text="Remove Action", icon="REMOVE")
+
+        for i, action_item in enumerate(mcsr_settings.actions):
+            row = box.row()
+            row.prop_search(action_item, "action", bpy.data, "actions", text="")
 
     def _draw_scene_configuration(self, layout, scene):
         """Draw scene configuration section"""
@@ -135,7 +153,7 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         box = layout.box()
         box.label(text="Render", icon="RENDER_STILL")
         box.operator(
-            "mcsr.render_still",
+            "mcsr.render",
             text=f"Render {active_object.name}",
             icon="RENDER_STILL",
         )

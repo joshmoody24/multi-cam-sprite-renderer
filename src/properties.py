@@ -35,13 +35,22 @@ def update_preview(self, context):
     create_preview_cameras(context)
 
 
+class McsrActionSetting(bpy.types.PropertyGroup):
+    """Reference to an Action"""
+
+    action: PointerProperty(  # type: ignore[misc]
+        name="Action", description="Action to render", type=bpy.types.Action
+    )
+
+
 class McsrObjectSettings(bpy.types.PropertyGroup):
     """Per-object settings for Multi-Cam Sprite Renderer"""
+
     reference_camera: PointerProperty(  # type: ignore[misc]
         name="Reference Camera",
         description="Camera to use as reference for position and settings",
         type=bpy.types.Object,
-        poll=lambda self, obj: obj.type == 'CAMERA'
+        poll=lambda self, obj: obj.type == "CAMERA",
     )
 
     camera_count: IntProperty(  # type: ignore[misc]
@@ -50,9 +59,9 @@ class McsrObjectSettings(bpy.types.PropertyGroup):
         default=DEFAULT_CAMERA_COUNT,
         min=3,
         max=24,
-        update=update_preview
+        update=update_preview,
     )
-    
+
     output_path: StringProperty(  # type: ignore[misc]
         name="Output Path",
         description="Directory to save rendered images",
@@ -60,35 +69,41 @@ class McsrObjectSettings(bpy.types.PropertyGroup):
         subtype="DIR_PATH",
     )
 
+    actions: CollectionProperty(  # type: ignore[misc]
+        name="Actions",
+        description="Actions to render for this object",
+        type=McsrActionSetting,
+    )
+
 
 class McsrObjectPointer(bpy.types.PropertyGroup):
     """Reference to an object with MCSR settings"""
+
     object: PointerProperty(  # type: ignore[misc]
-        name="Object",
-        description="Object with MCSR settings",
-        type=bpy.types.Object
+        name="Object", description="Object with MCSR settings", type=bpy.types.Object
     )
 
 
 def register_properties():
     """Register all properties for the addon"""
+    bpy.utils.register_class(McsrActionSetting)
     bpy.utils.register_class(McsrObjectSettings)
     bpy.utils.register_class(McsrObjectPointer)
-    
+
     # Add object settings
     bpy.types.Object.mcsr = PointerProperty(type=McsrObjectSettings)  # type: ignore[misc]
-    
+
     # Add active object selection and list to scene
     bpy.types.Scene.mcsr_active_object = PointerProperty(  # type: ignore[misc]
         name="Active MCSR Object",
         description="Currently selected object for MCSR settings",
-        type=bpy.types.Object
+        type=bpy.types.Object,
     )
-    
+
     bpy.types.Scene.mcsr_objects = CollectionProperty(  # type: ignore[misc]
         name="MCSR Objects",
         description="Objects with MCSR settings",
-        type=McsrObjectPointer
+        type=McsrObjectPointer,
     )
 
     bpy.types.Scene.mcsr_distance = FloatProperty(  # type: ignore[misc]
@@ -205,6 +220,7 @@ def unregister_properties():
     cleanup_preview_cameras()
 
     # Remove object settings
+    bpy.utils.unregister_class(McsrActionSetting)
     bpy.utils.unregister_class(McsrObjectSettings)
     bpy.utils.unregister_class(McsrObjectPointer)
     del bpy.types.Object.mcsr

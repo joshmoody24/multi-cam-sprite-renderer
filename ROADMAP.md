@@ -55,20 +55,29 @@ This document outlines the planned changes to transform the Multi-Cam Sprite Ren
 
 - Implement hierarchical output folder structure:
   ```
-  <output_folder>/<blend_file_name>/<object_name>/<action_name | "_default">/camera_<n>/<pass_name>.<extension>
+  <output_folder>/<action_name | "_default">/camera_<n>/<pass_name>.<extension>
   ```
-- Generate metadata JSON with animation timing information in the blend file folder
-- The metadata file will be named `<blend_file_name>.metadata.json`
+- Generate metadata JSON with animation timing information
+- The metadata file will be named `metadata.json`
 
 ## Metadata JSON Format
 
 ```json
 {
-  "fps": 24,
-  "frameIndexDurationOverridesInSeconds": {
-    "5": 0.25,
-    "10": 0.5
-  }
+    "fps": 24,
+    "frameDimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "objects": [
+        "actions": [
+            "frameCount": 10,
+            "frameIndexDurationOverride": {
+                "5": 0.25,
+                "10": 0.5
+            }
+        ]
+    ]
 }
 ```
 
@@ -194,7 +203,7 @@ class McsrObjectSettings(PropertyGroup):
     # Action settings
     actions: CollectionProperty(type=McsrActionSetting)
     skip_duplicate_frames: BoolProperty()
-    duplicate_threshold: FloatProperty()
+    duplicate_sensitivity: FloatProperty()
 
     # Render settings
     passes: CollectionProperty(type=McsrPassSetting)
@@ -207,9 +216,7 @@ The final output will follow this structure:
 
 ```
 <output_folder>/
-  <blend_file_name>/
-    <blend_file_name>.metadata.json
-    <object_name>/
+      metadata.json
       <action_name | "_default">/
         camera_<n>/
           <pass_name>.<extension>

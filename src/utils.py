@@ -6,18 +6,12 @@ import os
 import tempfile
 import shutil
 import glob
-from bpy.types import CompositorNodeOutputFile
 from mathutils import Vector
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .mcsr_types import McsrScene
 
 from .constants import (
     PREVIEW_COLLECTION_NAME,
     PREVIEW_PARENT_NAME,
     PREVIEW_CAMERA_PREFIX,
-    PREVIEW_COLOR,
 )
 
 
@@ -30,20 +24,7 @@ def get_scene_center(scene):
     return sum([obj.location for obj in mesh_objects], Vector()) / len(mesh_objects)
 
 
-def calculate_camera_positions(center, distance, camera_count):
-    """Generate camera positions in a circle around the center point"""
-    positions = []
-    for i in range(camera_count):
-        angle = (i / camera_count) * 2 * math.pi
-        position = Vector(
-            (
-                center.x + distance * math.cos(angle),
-                center.y + distance * math.sin(angle),
-                center.z,
-            )
-        )
-        positions.append(position)
-    return positions
+# Note: calculate_camera_positions moved to camera_utils.py for better organization
 
 
 def apply_camera_settings(camera, scene):
@@ -82,52 +63,7 @@ def cleanup_preview_cameras():
         bpy.data.objects.remove(parent, do_unlink=True)
 
 
-def create_preview_cameras(context):
-    """Create temporary camera objects for preview"""
-    scene = context.scene
-    center = get_scene_center(scene)
-    camera_positions = calculate_camera_positions(
-        center, scene.mcsr_distance, scene.mcsr_camera_count
-    )
-
-    # Create or get preview collection
-    preview_collection = bpy.data.collections.get(PREVIEW_COLLECTION_NAME)
-    if not preview_collection:
-        preview_collection = bpy.data.collections.new(PREVIEW_COLLECTION_NAME)
-        context.scene.collection.children.link(preview_collection)
-
-    # Create parent empty object
-    bpy.ops.object.empty_add(type="PLAIN_AXES", location=center)
-    parent_empty = context.active_object
-    parent_empty.name = PREVIEW_PARENT_NAME
-    parent_empty.empty_display_size = 0.5
-    parent_empty.hide_render = True
-    parent_empty.hide_select = True
-    parent_empty.color = PREVIEW_COLOR
-
-    # Move parent to preview collection
-    if parent_empty.name in context.scene.collection.objects:
-        context.scene.collection.objects.unlink(parent_empty)
-    preview_collection.objects.link(parent_empty)
-
-    # Create preview cameras
-    for i, cam_location in enumerate(camera_positions):
-        bpy.ops.object.camera_add(location=cam_location)
-        camera = context.active_object
-        camera.name = f"{PREVIEW_CAMERA_PREFIX}{i:02d}"
-
-        camera.hide_render = True
-        camera.hide_select = True
-        camera.color = PREVIEW_COLOR
-
-        apply_camera_settings(camera, scene)
-        point_camera_at_target(camera, center)
-
-        # Parent camera to the empty object and move to collection
-        camera.parent = parent_empty
-        if camera.name in context.scene.collection.objects:
-            context.scene.collection.objects.unlink(camera)
-        preview_collection.objects.link(camera)
+# Note: create_preview_cameras moved to camera_utils.py for better organization
 
 
 def create_sprite_sheet_from_temp_files(
@@ -283,13 +219,7 @@ def setup_compositor_nodes(
     cleanup_compositor_nodes(scene)
 
     # Enable required render passes
-    view_layer = scene.view_layers[0]
-    if "diffuse" in passes:
-        view_layer.use_pass_diffuse_color = True
-    if "specular" in passes:
-        view_layer.use_pass_glossy_color = True
-    if "normal" in passes:
-        view_layer.use_pass_normal = True
+    _enable_render_passes(scene, passes)
 
     # Create render layers node
     render_layers = nodes.new(type="CompositorNodeRLayers")
@@ -301,13 +231,17 @@ def setup_compositor_nodes(
         create_normal_transform_nodes(scene, render_layers, 400, 0)
 
     # Create file output node for each pass
+    _create_pass_outputs(scene, passes, render_layers, temp_dir)
+
+
+def _create_pass_outputs(scene, passes, render_layers, temp_dir):
+    """Create file output nodes for each render pass"""
+    nodes = scene.node_tree.nodes
     x_offset = 400
     y_offset = 0
 
     for pass_name in passes:
-        file_output: CompositorNodeOutputFile = nodes.new(
-            type="CompositorNodeOutputFile"
-        )
+        file_output = nodes.new(type="CompositorNodeOutputFile")
         file_output.name = f"MCSR_Output_{pass_name}"
         file_output.label = f"MCSR {pass_name.title()}"
         file_output.location = (x_offset, y_offset)
@@ -318,35 +252,81 @@ def setup_compositor_nodes(
 
         # Clear default input and add named input
         file_output.file_slots.clear()
-        slot = file_output.file_slots.new(f"temp_view_00_{pass_name}")
+        file_output.file_slots.new(pass_name)
 
         # Connect appropriate output to file output
-        if pass_name == "lit":
-            links.new(render_layers.outputs["Image"], file_output.inputs[0])
-        elif pass_name == "diffuse":
-            # Use Set Alpha node to ensure proper alpha channel
-            set_alpha = nodes.new(type="CompositorNodeSetAlpha")
-            set_alpha.name = f"MCSR_SetAlpha_{pass_name}"
-            set_alpha.location = (x_offset - 100, y_offset)
-
-            links.new(render_layers.outputs["DiffCol"], set_alpha.inputs["Image"])
-            links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
-            links.new(set_alpha.outputs["Image"], file_output.inputs[0])
-        elif pass_name == "specular":
-            # Use Set Alpha node to ensure proper alpha channel
-            set_alpha = nodes.new(type="CompositorNodeSetAlpha")
-            set_alpha.name = f"MCSR_SetAlpha_{pass_name}"
-            set_alpha.location = (x_offset - 100, y_offset)
-
-            links.new(render_layers.outputs["GlossCol"], set_alpha.inputs["Image"])
-            links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
-            links.new(set_alpha.outputs["Image"], file_output.inputs[0])
-        elif pass_name == "normal":
-            # Connect to already created normal transform nodes
-            normal_transform_output = scene.node_tree.nodes["MCSR_SetAlphaNorm"].outputs["Image"]
-            links.new(normal_transform_output, file_output.inputs[0])
+        _connect_pass_to_output(
+            scene, pass_name, render_layers, file_output, x_offset, y_offset
+        )
 
         y_offset -= 200
+
+
+def _enable_render_passes(scene, passes):
+    """Enable required render passes in view layer"""
+    view_layer = scene.view_layers[0]
+    if "diffuse" in passes:
+        view_layer.use_pass_diffuse_color = True
+    if "specular" in passes:
+        view_layer.use_pass_glossy_color = True
+    if "normal" in passes:
+        view_layer.use_pass_normal = True
+
+
+def _connect_pass_to_output(
+    scene, pass_name, render_layers, file_output, x_offset, y_offset
+):
+    """Connect render pass output to file output node"""
+    nodes = scene.node_tree.nodes
+    links = scene.node_tree.links
+
+    if pass_name == "lit":
+        _setup_lit_pass(render_layers, file_output, links)
+    elif pass_name == "diffuse":
+        _setup_diffuse_pass(
+            render_layers, file_output, nodes, links, x_offset, y_offset
+        )
+    elif pass_name == "specular":
+        _setup_specular_pass(
+            render_layers, file_output, nodes, links, x_offset, y_offset
+        )
+    elif pass_name == "normal":
+        _setup_normal_pass(scene, file_output, links)
+
+
+def _setup_lit_pass(render_layers, file_output, links):
+    """Setup lit pass connection"""
+    links.new(render_layers.outputs["Image"], file_output.inputs[0])
+
+
+def _setup_diffuse_pass(render_layers, file_output, nodes, links, x_offset, y_offset):
+    """Setup diffuse pass with alpha channel"""
+    set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha.name = "MCSR_SetAlpha_diffuse"
+    set_alpha.location = (x_offset - 100, y_offset)
+
+    links.new(render_layers.outputs["DiffCol"], set_alpha.inputs["Image"])
+    links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
+    links.new(set_alpha.outputs["Image"], file_output.inputs[0])
+
+
+def _setup_specular_pass(render_layers, file_output, nodes, links, x_offset, y_offset):
+    """Setup specular pass with alpha channel"""
+    set_alpha = nodes.new(type="CompositorNodeSetAlpha")
+    set_alpha.name = "MCSR_SetAlpha_specular"
+    set_alpha.location = (x_offset - 100, y_offset)
+
+    links.new(render_layers.outputs["GlossCol"], set_alpha.inputs["Image"])
+    links.new(render_layers.outputs["Alpha"], set_alpha.inputs["Alpha"])
+    links.new(set_alpha.outputs["Image"], file_output.inputs[0])
+
+
+def _setup_normal_pass(scene, file_output, links):
+    """Setup normal pass connection to transform nodes"""
+    normal_transform_output = scene.node_tree.nodes["MCSR_SetAlphaNorm"].outputs[
+        "Image"
+    ]
+    links.new(normal_transform_output, file_output.inputs[0])
 
 
 def create_normal_transform_nodes(
@@ -389,6 +369,9 @@ def create_normal_transform_nodes(
     """
 
     nt = scene.node_tree
+    assert (
+        nt is not None
+    ), "Scene node tree is None when creating normal transform nodes"
     nodes, links = nt.nodes, nt.links
 
     # ───────────────────────────── 0. Separate world normal
