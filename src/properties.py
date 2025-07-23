@@ -212,6 +212,12 @@ def register_properties():
         default=False,
     )
 
+    bpy.types.Scene.mcsr_skip_duplicate_frames = BoolProperty(  # type: ignore[misc]
+        name="Skip Duplicate Frames",
+        description="Skip rendering frames that are identical to the previous frame",
+        default=False,
+    )
+
 
 def unregister_properties():
     """Unregister all properties and clean up preview objects"""

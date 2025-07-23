@@ -20,7 +20,7 @@ This document outlines the planned changes to transform the Multi-Cam Sprite Ren
 - Between each sprite render, the camera will be rotated by the appropriate number of degrees based on the total number of cameras
 - This eliminates the need for the plugin to store camera settings directly
 
-### 3. Animation Action Support
+### 3. Animation Action Support - COMPLETE
 
 - Add UI for selecting actions to render for each object
 - If no action is selected, render only the current single frame as a "\_default" action
@@ -58,33 +58,36 @@ This document outlines the planned changes to transform the Multi-Cam Sprite Ren
   <output_folder>/<action_name | "_default">/camera_<n>/<pass_name>.<extension>
   ```
 - Generate metadata JSON with animation timing information
-- The metadata file will be named `metadata.json`
+- The metadata file will be named `metadata.json` and have one file per object.
 
 ## Metadata JSON Format
 
 ```json
 {
-    "fps": 24,
-    "frameDimensions": {
-        "width": 1024,
-        "height": 1024
-    },
-    "objects": [
-        "actions": [
-            "frameCount": 10,
-            "frameIndexDurationOverride": {
-                "5": 0.25,
-                "10": 0.5
-            }
-        ]
-    ]
+  "fps": 24,
+  "frameDimensions": {
+    "width": 1024,
+    "height": 1024
+  },
+  "actions": [
+    {
+      "name": "action_name",
+      "sprites": [
+        {
+          "x": 0,
+          "y": 0,
+          "frames": 1
+        },
+        {
+          "x": 1024,
+          "y": 0,
+          "frames": 2
+        }
+      ]
+    }
+  ]
 }
 ```
-
-The metadata contains:
-
-- `fps`: The base frames per second for the animation
-- `frameIndexDurationOverridesInSeconds`: A mapping between frame index and duration in seconds for frames that deviate from the standard fps timing
 
 ## Implementation Plan
 
@@ -203,7 +206,6 @@ class McsrObjectSettings(PropertyGroup):
     # Action settings
     actions: CollectionProperty(type=McsrActionSetting)
     skip_duplicate_frames: BoolProperty()
-    duplicate_sensitivity: FloatProperty()
 
     # Render settings
     passes: CollectionProperty(type=McsrPassSetting)
