@@ -21,6 +21,9 @@ class ApplyRecommendedSettingsOperator(McsrOperator):
 
         # Enable Freestyle for outlines
         scene.render.use_freestyle = scene.mcsr_outline
+        if scene.mcsr_outline:
+            # Set line thickness to 0.7px
+            scene.render.line_thickness = 0.7
 
         if scene.mcsr_pixel_art:
             scene.render.filter_size = 0.0

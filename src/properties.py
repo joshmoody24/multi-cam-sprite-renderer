@@ -24,6 +24,12 @@ from .constants import (
 )
 
 
+def update_reference_camera(self, context):
+    """Initialize camera angles when a reference camera is selected"""
+    # Set camera_count to default, which will trigger update_camera_angles
+    self.camera_count = DEFAULT_CAMERA_COUNT
+
+
 def update_camera_angles(self, context):
     """Reset angles when camera count changes"""
     # Clear existing angles
@@ -81,6 +87,7 @@ class McsrObjectSettings(bpy.types.PropertyGroup):
         description="Camera to use as reference for position and settings",
         type=bpy.types.Object,
         poll=lambda self, obj: obj.type == "CAMERA",
+        update=update_reference_camera,
     )
 
     camera_count: IntProperty(  # type: ignore[misc]
@@ -215,7 +222,7 @@ def register_properties():
 
     bpy.types.Scene.mcsr_outline = BoolProperty(  # type: ignore[misc]
         name="Outline",
-        description="Enable freestyle outline (see Render > Freestyle for more settings)",
+        description="Enable freestyle outline (see Render > Freestyle and View Layer > Freestyle for more settings)",
         default=False,
     )
 
