@@ -223,7 +223,7 @@ class MultiCamSpriteRenderOperator(McsrOperator):
         try:
             camera_positions = calculate_camera_positions(
                 target_object.location,
-                target_object.mcsr.camera_count,
+                target_object.mcsr.camera_angles,
                 target_object.mcsr.reference_camera,
                 include_reference=True,
             )
