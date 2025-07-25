@@ -84,6 +84,7 @@ def generate_metadata_dict(
     frame_width: int,
     frame_height: int,
     grid_cols: int,
+    enabled_passes: List[str],
     frame_durations: Optional[Dict[str, List[List[int]]]] = None,
 ) -> Dict[str, Any]:
     """
@@ -98,6 +99,7 @@ def generate_metadata_dict(
         frame_width: Width of individual frames in pixels
         frame_height: Height of individual frames in pixels
         grid_cols: Number of columns in the sprite sheet grid
+        enabled_passes: List of enabled render passes
         frame_durations: Dict mapping pass names to lists of frame durations per action
 
     Returns:
@@ -109,7 +111,7 @@ def generate_metadata_dict(
 
         sprites_data = []
         # If skipping duplicates, use the duration data.
-        if frame_durations:
+        if frame_durations and frame_durations.keys():
             # Assume all passes have the same frame structure, use the first pass's durations.
             first_pass = next(iter(frame_durations.keys()))
 
@@ -147,6 +149,7 @@ def generate_metadata_dict(
     return {
         "fps": fps,
         "frameDimensions": {"width": frame_width, "height": frame_height},
+        "passes": enabled_passes,
         "actions": actions_list,
     }
 

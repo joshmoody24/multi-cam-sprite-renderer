@@ -37,7 +37,7 @@ This document outlines the planned changes to transform the Multi-Cam Sprite Ren
 - Support non-circular camera paths by allowing custom angle values
 - When the number of cameras changes, reset angles to equidistant values
 
-### 5. Render Pass System
+### 5. Render Pass System - COMPLETE
 
 - Maintain current pass system (diffuse, normal, etc.)
 - Export each pass to separate files with appropriate naming
@@ -69,6 +69,7 @@ This document outlines the planned changes to transform the Multi-Cam Sprite Ren
     "width": 1024,
     "height": 1024
   },
+  "passes": ["normal", "diffuse"],
   "actions": [
     {
       "name": "action_name",
