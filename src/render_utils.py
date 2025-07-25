@@ -83,64 +83,71 @@ def generate_metadata_dict(
     fps: float,
     frame_width: int,
     frame_height: int,
+    grid_cols: int,
     frame_durations: Optional[Dict[str, List[List[int]]]] = None,
 ) -> Dict[str, Any]:
     """
     Generate metadata dictionary according to roadmap specification.
 
     Creates a metadata structure with FPS, frame dimensions, and per-action
-    frame counts. Follows the objects/actions array format for future
-    multi-object support.
+    sprite data, including position and frame durations.
 
     Args:
         actions_to_render: List of Blender actions (None = single frame)
         fps: Frames per second for animations
         frame_width: Width of individual frames in pixels
         frame_height: Height of individual frames in pixels
+        grid_cols: Number of columns in the sprite sheet grid
         frame_durations: Dict mapping pass names to lists of frame durations per action
 
     Returns:
         Dictionary with metadata structure ready for JSON serialization
     """
-    actions_data = []
+    actions_list = []
     for action_idx, action in enumerate(actions_to_render):
-        if action:
-            original_frame_count = int(
-                action.frame_range[1] - action.frame_range[0] + 1
-            )
-        else:
-            original_frame_count = 1
+        action_name = action.name if action else "_default"
 
-        # Use actual rendered frame count if frame durations are provided
+        sprites_data = []
+        # If skipping duplicates, use the duration data.
         if frame_durations:
-            # Assume all passes have the same frame structure, use first pass
+            # Assume all passes have the same frame structure, use the first pass's durations.
             first_pass = next(iter(frame_durations.keys()))
-            if action_idx < len(frame_durations[first_pass]):
-                actual_frame_count = len(frame_durations[first_pass][action_idx])
-                # Create duration overrides for frames that last longer than 1
-                duration_overrides = {}
-                for frame_idx, duration in enumerate(
-                    frame_durations[first_pass][action_idx]
-                ):
-                    if duration > 1:
-                        duration_overrides[str(frame_idx)] = duration
-            else:
-                actual_frame_count = original_frame_count
-                duration_overrides = {}
-        else:
-            actual_frame_count = original_frame_count
-            duration_overrides = {}
 
-        action_data = {
-            "frameCount": actual_frame_count,
-            "frameIndexDurationOverride": duration_overrides,
-        }
-        actions_data.append(action_data)
+            if action_idx < len(frame_durations[first_pass]):
+                action_specific_durations = frame_durations[first_pass][action_idx]
+
+                for sprite_idx, duration in enumerate(action_specific_durations):
+                    sprite_data = {
+                        "x": (sprite_idx % grid_cols) * frame_width,
+                        "y": (sprite_idx // grid_cols) * frame_height,
+                        "frames": duration,
+                    }
+                    sprites_data.append(sprite_data)
+        else:  # Not skipping duplicates, so each frame has a duration of 1.
+            if action:
+                frame_count = int(action.frame_range[1] - action.frame_range[0] + 1)
+            else:
+                frame_count = 1
+
+            for sprite_idx in range(frame_count):
+                sprite_data = {
+                    "x": (sprite_idx % grid_cols) * frame_width,
+                    "y": (sprite_idx // grid_cols) * frame_height,
+                    "frames": 1,
+                }
+                sprites_data.append(sprite_data)
+
+        actions_list.append(
+            {
+                "name": action_name,
+                "sprites": sprites_data,
+            }
+        )
 
     return {
         "fps": fps,
         "frameDimensions": {"width": frame_width, "height": frame_height},
-        "objects": [{"actions": actions_data}],
+        "actions": actions_list,
     }
 
 

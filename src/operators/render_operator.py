@@ -169,6 +169,7 @@ class MultiCamSpriteRenderOperator(McsrOperator):
                 scene.render.fps,
                 render_params["actual_render_x"],
                 render_params["actual_render_y"],
+                render_params["grid_cols"],
                 self._frame_durations if scene.mcsr_skip_duplicate_frames else None,
             )
             save_metadata_json(metadata_dict, render_params["output_path"])

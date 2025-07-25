@@ -29,7 +29,7 @@ This document outlines the planned changes to transform the Multi-Cam Sprite Ren
 - When enabled, if an animation has the object staying in the same position for multiple frames, only export a single frame
 - Store frame duration metadata for optimized animations
 
-### 4. Customizable Angles
+### 4. Customizable Angles - COMPLETE
 
 - Allow manual override of camera angles (in degrees)
 - Default to equidistant angles when camera count changes (e.g., 4 cameras = 0°, 90°, 180°, 270°)
