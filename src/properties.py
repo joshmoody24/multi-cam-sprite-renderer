@@ -1,6 +1,7 @@
 """Property definitions for the Multi-Cam Sprite Renderer addon"""
 
 import bpy
+import math
 from bpy.props import (
     IntProperty,
     FloatProperty,
@@ -23,6 +24,20 @@ from .constants import (
 )
 
 
+def update_camera_angles(self, context):
+    """Reset angles when camera count changes"""
+    # Clear existing angles
+    self.camera_angles.clear()
+
+    # Add new equidistant angles
+    for i in range(self.camera_count):
+        angle_item = self.camera_angles.add()
+        angle_item.angle = math.radians((i / self.camera_count) * 360.0)
+
+    # Also trigger preview update
+    update_preview(self, context)
+
+
 def update_preview(self, context):
     """Refresh preview when camera settings change"""
     if not context.scene.mcsr_show_preview:
@@ -33,6 +48,21 @@ def update_preview(self, context):
 
     cleanup_preview_cameras()
     create_preview_cameras(context)
+
+
+class McsrAngleSetting(bpy.types.PropertyGroup):
+    """Angle setting for a camera"""
+
+    angle: FloatProperty(  # type: ignore[misc]
+        name="Angle",
+        description="Camera angle in degrees",
+        default=0.0,
+        min=0.0,
+        max=360.0,
+        subtype="ANGLE",
+        unit="ROTATION",
+        update=update_preview,
+    )
 
 
 class McsrActionSetting(bpy.types.PropertyGroup):
@@ -57,9 +87,9 @@ class McsrObjectSettings(bpy.types.PropertyGroup):
         name="Camera Count",
         description="Number of cameras to render from",
         default=DEFAULT_CAMERA_COUNT,
-        min=3,
+        min=1,
         max=24,
-        update=update_preview,
+        update=update_camera_angles,
     )
 
     output_path: StringProperty(  # type: ignore[misc]
@@ -75,6 +105,12 @@ class McsrObjectSettings(bpy.types.PropertyGroup):
         type=McsrActionSetting,
     )
 
+    camera_angles: CollectionProperty(  # type: ignore[misc]
+        name="Camera Angles",
+        description="Custom camera angles",
+        type=McsrAngleSetting,
+    )
+
 
 class McsrObjectPointer(bpy.types.PropertyGroup):
     """Reference to an object with MCSR settings"""
@@ -86,6 +122,7 @@ class McsrObjectPointer(bpy.types.PropertyGroup):
 
 def register_properties():
     """Register all properties for the addon"""
+    bpy.utils.register_class(McsrAngleSetting)
     bpy.utils.register_class(McsrActionSetting)
     bpy.utils.register_class(McsrObjectSettings)
     bpy.utils.register_class(McsrObjectPointer)
@@ -225,13 +262,29 @@ def unregister_properties():
 
     cleanup_preview_cameras()
 
-    # Remove object settings
+    # Unregister all classes
+    bpy.utils.unregister_class(McsrAngleSetting)
     bpy.utils.unregister_class(McsrActionSetting)
     bpy.utils.unregister_class(McsrObjectSettings)
     bpy.utils.unregister_class(McsrObjectPointer)
-    del bpy.types.Object.mcsr
 
-    # Remove all scene properties
-    for prop in dir(bpy.types.Scene):
-        if prop.startswith("mcsr_"):
-            delattr(bpy.types.Scene, prop)
+    # Delete properties from bpy.types
+    del bpy.types.Object.mcsr
+    del bpy.types.Scene.mcsr_active_object
+    del bpy.types.Scene.mcsr_objects
+    del bpy.types.Scene.mcsr_distance
+    del bpy.types.Scene.mcsr_camera_type
+    del bpy.types.Scene.mcsr_focal_length
+    del bpy.types.Scene.mcsr_ortho_scale
+    del bpy.types.Scene.mcsr_clip_start
+    del bpy.types.Scene.mcsr_clip_end
+    del bpy.types.Scene.mcsr_spacing
+    del bpy.types.Scene.mcsr_show_preview
+    del bpy.types.Scene.mcsr_pixel_art
+    del bpy.types.Scene.mcsr_render_lit
+    del bpy.types.Scene.mcsr_render_diffuse
+    del bpy.types.Scene.mcsr_render_specular
+    del bpy.types.Scene.mcsr_render_normal
+    del bpy.types.Scene.mcsr_show_debug
+    del bpy.types.Scene.mcsr_debug_preserve_compositor
+    del bpy.types.Scene.mcsr_skip_duplicate_frames

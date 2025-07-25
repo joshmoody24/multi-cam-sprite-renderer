@@ -61,6 +61,7 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
             )
             if active_object.mcsr.reference_camera:
                 box.prop(active_object.mcsr, "camera_count")
+                self._draw_camera_angles(box, active_object.mcsr)
                 box.prop(active_object.mcsr, "output_path")
 
             self._draw_action_settings(layout, active_object.mcsr)
@@ -71,6 +72,19 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
             self._draw_render_buttons(layout, scene, active_object)
         else:
             layout.label(text="Select an MCSR object to configure", icon="INFO")
+
+    def _draw_camera_angles(self, layout, mcsr_settings):
+        """Draw camera angle settings"""
+        box = layout.box()
+        box.label(text="Camera Angles", icon="EMPTY_ARROWS")
+
+        # Display each angle property
+        for i, angle_item in enumerate(mcsr_settings.camera_angles):
+            row = box.row()
+            # Disable the first angle (locked at 0)
+            if i == 0:
+                row.enabled = False
+            row.prop(angle_item, "angle", text=f"Camera {i+1}")
 
     def _draw_sprite_settings(self, layout, scene):
         """Draw sprite sheet settings section"""

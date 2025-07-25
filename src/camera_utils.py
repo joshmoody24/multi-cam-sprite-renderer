@@ -27,16 +27,18 @@ def clone_camera(reference_camera):
 
 
 def calculate_camera_positions(
-    center, camera_count, reference_camera, include_reference=True
+    center,
+    camera_angles,
+    reference_camera,
+    include_reference=True,
 ):
     """Generate camera positions around center point, preserving reference camera orientation
 
     Args:
         center: Center point to rotate around
-        camera_count: Total number of cameras
+        camera_angles: List of angles in radians
         reference_camera: Camera to use as reference for position and orientation
         include_reference: If True, includes reference position and spaces remaining positions.
-                         If False, creates evenly spaced positions excluding reference position.
 
     Returns:
         List of tuples (position, rotation), where rotation is a euler rotation
@@ -48,12 +50,15 @@ def calculate_camera_positions(
     ref_to_center = center - reference_camera.location
     ref_rotation = reference_camera.rotation_euler.copy()
 
+    # The first angle is always the reference position
     if include_reference:
         positions.append((reference_camera.location.copy(), ref_rotation.copy()))
 
-    for i in range(1, camera_count):
-        angle = (i / camera_count) * 2 * math.pi
-        rotation_matrix = Matrix.Rotation(angle, 4, "Z")
+    # Start from the second angle if including the reference
+    start_index = 1 if include_reference else 0
+    for i in range(start_index, len(camera_angles)):
+        angle_rad = camera_angles[i].angle
+        rotation_matrix = Matrix.Rotation(angle_rad, 4, "Z")
 
         # Calculate position
         offset = rotation_matrix @ ref_to_center
@@ -98,18 +103,16 @@ def create_preview_cameras(context):
 
     # Calculate camera positions
     center = target_object.location
-    camera_count = target_object.mcsr.camera_count
+    camera_angles = target_object.mcsr.camera_angles
     reference_camera = target_object.mcsr.reference_camera
     camera_positions = calculate_camera_positions(
-        center, camera_count, reference_camera, include_reference=False
+        center, camera_angles, reference_camera, include_reference=False
     )
 
     # Create preview cameras
     for i, (position, rotation) in enumerate(camera_positions):
         camera = clone_camera(reference_camera)
         camera.name = f"{PREVIEW_CAMERA_PREFIX}{i:02d}"
-        camera.location = position
-        camera.rotation_euler = rotation
 
         camera.hide_render = True
         camera.hide_select = True
@@ -120,3 +123,8 @@ def create_preview_cameras(context):
         if camera.name in context.scene.collection.objects:
             context.scene.collection.objects.unlink(camera)
         preview_collection.objects.link(camera)
+
+        # Construct and set the world matrix AFTER parenting
+        # This ensures the camera is positioned correctly in world space
+        world_matrix = Matrix.Translation(position) @ rotation.to_matrix().to_4x4()
+        camera.matrix_world = world_matrix
