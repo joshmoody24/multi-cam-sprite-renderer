@@ -213,6 +213,12 @@ def register_properties():
         default=False,
     )
 
+    bpy.types.Scene.mcsr_outline = BoolProperty(  # type: ignore[misc]
+        name="Outline",
+        description="Enable freestyle outline (see Render > Freestyle for more settings)",
+        default=False,
+    )
+
     bpy.types.Scene.mcsr_render_lit = BoolProperty(  # type: ignore[misc]
         name="Lit",
         description="Render standard lit pass",
@@ -281,6 +287,7 @@ def unregister_properties():
     del bpy.types.Scene.mcsr_spacing
     del bpy.types.Scene.mcsr_show_preview
     del bpy.types.Scene.mcsr_pixel_art
+    del bpy.types.Scene.mcsr_outline
     del bpy.types.Scene.mcsr_render_lit
     del bpy.types.Scene.mcsr_render_diffuse
     del bpy.types.Scene.mcsr_render_specular

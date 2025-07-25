@@ -19,8 +19,13 @@ class ApplyRecommendedSettingsOperator(McsrOperator):
     def execute_mcsr(self, scene) -> Set[OperatorReturnItems]:
         scene.render.film_transparent = True
 
+        # Enable Freestyle for outlines
+        scene.render.use_freestyle = scene.mcsr_outline
+
         if scene.mcsr_pixel_art:
             scene.render.filter_size = 0.0
+            if scene.mcsr_outline:
+                scene.eevee.taa_render_samples = 1
 
         assert scene.view_settings is not None, "Scene view settings should not be None"
         scene.view_settings.view_transform = "Raw"  # type: ignore[attr-defined]

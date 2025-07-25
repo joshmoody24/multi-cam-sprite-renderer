@@ -109,7 +109,9 @@ class MultiCamSpriteRendererPanel(bpy.types.Panel):
         """Draw scene configuration section"""
         box = layout.box()
         box.label(text="Scene Configuration", icon="SCENE_DATA")
-        box.prop(scene, "mcsr_pixel_art")
+        row = box.row()
+        row.prop(scene, "mcsr_pixel_art")
+        row.prop(scene, "mcsr_outline")
         box.prop(scene, "mcsr_skip_duplicate_frames")
         box.operator(
             "mcsr.apply_recommended_settings", text="Apply Recommended Settings"
