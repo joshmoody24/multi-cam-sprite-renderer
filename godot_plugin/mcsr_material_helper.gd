@@ -54,16 +54,17 @@ static func create_sprite_frames_with_materials(
 	# Get base directory for finding sprite sheet images
 	var base_dir = metadata_path.get_base_dir()
 	
-	# Load textures for the first action/camera (we'll use this for the material)
+	# Load textures for the first action and specified camera angle
 	var diffuse_texture = null
 	var normal_texture = null
+	var camera_angle = options.get("camera_angle", 0)
 	
 	if actions.size() > 0:
 		var first_action = actions[0].get("name", "default")
-		diffuse_texture = _load_sprite_sheet_texture(base_dir, first_action, "diffuse")
+		diffuse_texture = _load_sprite_sheet_texture(base_dir, first_action, "diffuse", camera_angle)
 		
 		if "normal" in passes:
-			normal_texture = _load_sprite_sheet_texture(base_dir, first_action, "normal")
+			normal_texture = _load_sprite_sheet_texture(base_dir, first_action, "normal", camera_angle)
 	
 	# Create material based on import mode
 	if options.get("create_normal_material", true) and diffuse_texture != null:
@@ -84,8 +85,8 @@ static func create_sprite_frames_with_materials(
 		sprite_frames.set_animation_loop(action_name, options.get("loop_animations", true))
 		sprite_frames.set_animation_speed(action_name, fps)
 		
-		# Load the sprite sheet texture for this action
-		var action_diffuse_texture = _load_sprite_sheet_texture(base_dir, action_name, "diffuse")
+		# Load the sprite sheet texture for this action and camera angle
+		var action_diffuse_texture = _load_sprite_sheet_texture(base_dir, action_name, "diffuse", camera_angle)
 		if action_diffuse_texture == null:
 			print("Warning: Could not load diffuse texture for action: ", action_name)
 			continue
@@ -112,10 +113,12 @@ static func create_sprite_frames_with_materials(
 	
 	return [sprite_frames, material]
 
-static func _load_sprite_sheet_texture(base_dir: String, action_name: String, pass_name: String) -> Texture2D:
+static func _load_sprite_sheet_texture(base_dir: String, action_name: String, pass_name: String, camera_angle: int = 0) -> Texture2D:
 	# Try multiple possible paths for the sprite sheet
+	var camera_folder = "camera_" + str(camera_angle)
 	var possible_paths = [
-		base_dir + "/" + action_name + "/camera_0/" + pass_name + ".png",
+		base_dir + "/" + action_name + "/" + camera_folder + "/" + pass_name + ".png",
+		base_dir + "/" + action_name + "/camera_0/" + pass_name + ".png",  # Fallback to camera_0
 		base_dir + "/" + action_name + "/" + pass_name + ".png",
 		base_dir + "/" + pass_name + ".png"
 	]
@@ -126,5 +129,5 @@ static func _load_sprite_sheet_texture(base_dir: String, action_name: String, pa
 			if texture != null:
 				return texture
 	
-	print("Warning: Could not find sprite sheet at any expected path for action: ", action_name, ", pass: ", pass_name)
+	print("Warning: Could not find sprite sheet at any expected path for action: ", action_name, ", pass: ", pass_name, ", camera: ", camera_angle)
 	return null

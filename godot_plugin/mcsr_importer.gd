@@ -41,13 +41,17 @@ func _get_import_options(path, preset_index):
 			return [
 				{"name": "import_mode", "default_value": ImportMode.MODE_2D},
 				{"name": "create_normal_material", "default_value": true},
-				{"name": "loop_animations", "default_value": true}
+				{"name": "loop_animations", "default_value": true},
+				{"name": "camera_angle", "default_value": 0, "property_hint": PROPERTY_HINT_RANGE, "hint_string": "0,7,1"},
+				{"name": "create_scene", "default_value": false}
 			]
 		1: # 3D Billboard Mode
 			return [
 				{"name": "import_mode", "default_value": ImportMode.MODE_3D_BILLBOARD},
 				{"name": "create_normal_material", "default_value": true},
-				{"name": "loop_animations", "default_value": true}
+				{"name": "loop_animations", "default_value": true},
+				{"name": "camera_angle", "default_value": 0, "property_hint": PROPERTY_HINT_RANGE, "hint_string": "0,7,1"},
+				{"name": "create_scene", "default_value": false}
 			]
 		_:
 			return []
@@ -100,8 +104,69 @@ func _import(source_file, save_path, options, platform_variants, gen_files):
 		else:
 			print("Warning: Failed to save material: ", material_save_result)
 	
+	# Create scene if requested
+	if options.get("create_scene", false):
+		var scene_path = save_path + "_scene.tscn"
+		var scene_result = _create_sample_scene(sprite_frames, material, options, scene_path)
+		
+		if scene_result == OK:
+			gen_files.append(scene_path)
+			print("Successfully created sample scene: ", scene_path)
+		else:
+			print("Warning: Failed to create sample scene: ", scene_result)
+	
 	print("Successfully imported MCSR sprite sheet: ", sprite_frames_path)
 	return OK
+
+func _create_sample_scene(sprite_frames: SpriteFrames, material: Material, options: Dictionary, scene_path: String) -> int:
+	var scene = PackedScene.new()
+	var root_node
+	
+	var import_mode = options.get("import_mode", ImportMode.MODE_2D)
+	
+	if import_mode == ImportMode.MODE_2D:
+		# Create 2D scene with AnimatedSprite2D
+		root_node = Node2D.new()
+		root_node.name = "MCSRSprite2D"
+		
+		var animated_sprite = AnimatedSprite2D.new()
+		animated_sprite.name = "AnimatedSprite2D"
+		animated_sprite.sprite_frames = sprite_frames
+		
+		if material != null and material is CanvasItemMaterial:
+			animated_sprite.material = material
+		
+		# Set to first animation
+		var animations = sprite_frames.get_animation_names()
+		if not animations.is_empty():
+			animated_sprite.animation = animations[0]
+			animated_sprite.play()
+		
+		root_node.add_child(animated_sprite)
+		animated_sprite.owner = root_node
+		
+	else:
+		# Create 3D scene with MeshInstance3D and QuadMesh
+		root_node = Node3D.new()
+		root_node.name = "MCSRSprite3D"
+		
+		var mesh_instance = MeshInstance3D.new()
+		mesh_instance.name = "MeshInstance3D"
+		
+		var quad_mesh = QuadMesh.new()
+		mesh_instance.mesh = quad_mesh
+		
+		if material != null and material is StandardMaterial3D:
+			mesh_instance.material_override = material
+		
+		root_node.add_child(mesh_instance)
+		mesh_instance.owner = root_node
+	
+	var packed_scene_result = scene.pack(root_node)
+	if packed_scene_result != OK:
+		return packed_scene_result
+	
+	return ResourceSaver.save(scene, scene_path)
 
 func _is_mcsr_metadata_file(file_path: String) -> bool:
 	# Check if filename ends with metadata.json
