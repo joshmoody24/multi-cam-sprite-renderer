@@ -1,0 +1,70 @@
+{
+  "fps": 24,
+  "frameDimensions": {
+    "width": 1024,
+    "height": 1024
+  },
+  "passes": ["diffuse", "normal"],
+  "actions": [
+    {
+      "name": "idle",
+      "sprites": [
+        {
+          "x": 0,
+          "y": 0,
+          "frames": 1
+        },
+        {
+          "x": 1024,
+          "y": 0,
+          "frames": 1
+        },
+        {
+          "x": 0,
+          "y": 1024,
+          "frames": 1
+        },
+        {
+          "x": 1024,
+          "y": 1024,
+          "frames": 1
+        }
+      ]
+    },
+    {
+      "name": "walk",
+      "sprites": [
+        {
+          "x": 0,
+          "y": 0,
+          "frames": 1
+        },
+        {
+          "x": 1024,
+          "y": 0,
+          "frames": 1
+        },
+        {
+          "x": 0,
+          "y": 1024,
+          "frames": 1
+        },
+        {
+          "x": 1024,
+          "y": 1024,
+          "frames": 1
+        },
+        {
+          "x": 2048,
+          "y": 0,
+          "frames": 1
+        },
+        {
+          "x": 2048,
+          "y": 1024,
+          "frames": 1
+        }
+      ]
+    }
+  ]
+}

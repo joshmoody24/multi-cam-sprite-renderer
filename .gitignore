@@ -1,3 +1,8 @@
+# Godot files
+.godot/
+*.tmp
+godot_plugin/test_*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
